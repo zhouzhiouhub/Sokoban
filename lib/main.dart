@@ -9,13 +9,13 @@ void main() {
 
 const List<String> boardLayout = [
   '##########',
-  '#   B    #',
+  '#   B   T#',
   '#  ####  #',
   '#  #  #  #',
   '#  # B####',
-  '#  #     #',
+  '#  # T   #',
   '#  ### # #',
-  '#   B  # #',
+  '# T B  # #',
   '##########',
 ];
 
@@ -60,18 +60,18 @@ BoardTile tileAt(List<String> layout, int row, int column) {
   };
 }
 
-Set<BoardPosition> initialBrickPositions(List<String> layout) {
-  final brickPositions = <BoardPosition>{};
+Set<BoardPosition> positionsForSymbol(List<String> layout, String symbol) {
+  final positions = <BoardPosition>{};
 
   for (var row = 0; row < layout.length; row++) {
     for (var column = 0; column < layout[row].length; column++) {
-      if (layout[row][column] == 'B') {
-        brickPositions.add(BoardPosition(row: row, column: column));
+      if (layout[row][column] == symbol) {
+        positions.add(BoardPosition(row: row, column: column));
       }
     }
   }
 
-  return brickPositions;
+  return positions;
 }
 
 class MyApp extends StatelessWidget {
@@ -100,7 +100,17 @@ class SokobanWallPage extends StatefulWidget {
 
 class _SokobanWallPageState extends State<SokobanWallPage> {
   BoardPosition _playerPosition = initialPlayerPosition;
-  late final Set<BoardPosition> _brickPositions = initialBrickPositions(boardLayout);
+  late final Set<BoardPosition> _brickPositions = positionsForSymbol(boardLayout, 'B');
+  late final Set<BoardPosition> _targetPositions = positionsForSymbol(boardLayout, 'T');
+
+  int get _boxesOnTargetCount {
+    return _brickPositions.where(_targetPositions.contains).length;
+  }
+
+  bool get _isLevelComplete {
+    return _targetPositions.isNotEmpty &&
+        _boxesOnTargetCount == _targetPositions.length;
+  }
 
   void _movePlayer(int rowOffset, int columnOffset) {
     final nextPosition = _playerPosition.move(rowOffset, columnOffset);
@@ -151,12 +161,15 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
 
   @override
   Widget build(BuildContext context) {
+    final boxesOnTargetCount = _boxesOnTargetCount;
+    final isLevelComplete = _isLevelComplete;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2EFE7),
       appBar: AppBar(
         backgroundColor: const Color(0xFF526652),
         foregroundColor: Colors.white,
-        title: const Text('推箱子 - 可移动角色'),
+        title: Text(isLevelComplete ? '推箱子 - 已过关' : '推箱子 - 目标点'),
       ),
       body: SafeArea(
         child: Shortcuts(
@@ -203,6 +216,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                 child: SokobanBoard(
                                   layout: boardLayout,
                                   brickPositions: _brickPositions,
+                                  targetPositions: _targetPositions,
                                   playerPosition: _playerPosition,
                                 ),
                               ),
@@ -212,9 +226,37 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      '小人可以推动单个箱子，箱子只能被推到墙体内部的空地上。',
+                    Text(
+                      '目标点进度：$boxesOnTargetCount/${_targetPositions.length}',
                       textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isLevelComplete
+                            ? const Color(0xFFDDEFD8)
+                            : const Color(0xFFE9E1CF),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isLevelComplete
+                              ? const Color(0xFF5B8A55)
+                              : const Color(0xFFC2B79D),
+                        ),
+                      ),
+                      child: Text(
+                        isLevelComplete
+                            ? '全部箱子已到目标点，过关！'
+                            : '把所有箱子推到圆形目标点即可过关。',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     MovementControls(
@@ -239,11 +281,13 @@ class SokobanBoard extends StatelessWidget {
     super.key,
     required this.layout,
     required this.brickPositions,
+    required this.targetPositions,
     required this.playerPosition,
   });
 
   final List<String> layout;
   final Set<BoardPosition> brickPositions;
+  final Set<BoardPosition> targetPositions;
   final BoardPosition playerPosition;
 
   @override
@@ -267,6 +311,7 @@ class SokobanBoard extends StatelessWidget {
                           final tile = brickPositions.contains(position)
                               ? BoardTile.brick
                               : tileAt(layout, row, column);
+                          final isTarget = targetPositions.contains(position);
                           final hasPlayer =
                               playerPosition.row == row &&
                               playerPosition.column == column;
@@ -274,6 +319,7 @@ class SokobanBoard extends StatelessWidget {
                           return SokobanTile(
                             key: ValueKey('${tile.name}-$row-$column-$hasPlayer'),
                             tile: tile,
+                            isTarget: isTarget,
                             hasPlayer: hasPlayer,
                           );
                         },
@@ -292,31 +338,33 @@ class SokobanTile extends StatelessWidget {
   const SokobanTile({
     super.key,
     required this.tile,
+    required this.isTarget,
     required this.hasPlayer,
   });
 
   final BoardTile tile;
+  final bool isTarget;
   final bool hasPlayer;
 
   @override
   Widget build(BuildContext context) {
-    final semanticsLabel = switch (tile) {
-      BoardTile.wall => '墙体',
-      BoardTile.brick => '砖块',
-      BoardTile.floor => hasPlayer ? '人物所在位置' : '地面',
+    final semanticsLabel = switch ((tile, isTarget, hasPlayer)) {
+      (BoardTile.wall, _, _) => '墙体',
+      (BoardTile.brick, true, _) => '目标点上的箱子',
+      (BoardTile.brick, false, _) => '箱子',
+      (BoardTile.floor, true, true) => '人物所在的目标点',
+      (BoardTile.floor, true, false) => '目标点',
+      (BoardTile.floor, false, true) => '人物所在位置',
+      (BoardTile.floor, false, false) => '地面',
     };
 
-    final backgroundColor = switch (tile) {
-      BoardTile.wall => const Color(0xFF3F493A),
-      BoardTile.brick => const Color(0xFFA86A3D),
-      BoardTile.floor => const Color(0xFFD8CFB9),
-    };
+    final backgroundColor = tile == BoardTile.wall
+        ? const Color(0xFF3F493A)
+        : const Color(0xFFD8CFB9);
 
-    final borderColor = switch (tile) {
-      BoardTile.wall => const Color(0xFF222820),
-      BoardTile.brick => const Color(0xFF7A4B27),
-      BoardTile.floor => const Color(0xFFC9BFA8),
-    };
+    final borderColor = tile == BoardTile.wall
+        ? const Color(0xFF222820)
+        : const Color(0xFFC9BFA8);
 
     return Semantics(
       label: semanticsLabel,
@@ -328,23 +376,34 @@ class SokobanTile extends StatelessWidget {
               color: backgroundColor,
               border: Border.all(color: borderColor, width: 0.7),
             ),
-            child: switch (tile) {
-              BoardTile.wall => const Center(
-                child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14),
-              ),
-              BoardTile.brick => Padding(
-                padding: const EdgeInsets.all(5),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFC98A55),
-                    border: Border.all(color: const Color(0xFF74441E), width: 1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+          ),
+          if (isTarget && tile != BoardTile.wall)
+            Center(
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4C4),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFB18B2C), width: 2),
                 ),
               ),
-              BoardTile.floor => const SizedBox.expand(),
-            },
-          ),
+            ),
+          if (tile == BoardTile.wall)
+            const Center(
+              child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14),
+            ),
+          if (tile == BoardTile.brick)
+            Padding(
+              padding: const EdgeInsets.all(5),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC98A55),
+                  border: Border.all(color: const Color(0xFF74441E), width: 1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
           if (hasPlayer)
             const Center(
               child: _PlayerAvatar(),
