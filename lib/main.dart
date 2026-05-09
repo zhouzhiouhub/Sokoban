@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -63,7 +64,7 @@ const List<SokobanLevel> sokobanLevels = [
     layout: [
       '##########',
       '#   B   T#',
-      '#  ####  #',
+      '#  # ##  #',
       '#  #  #  #',
       '#  # B####',
       '#  # T   #',
@@ -98,11 +99,44 @@ class BoardPosition {
   int get hashCode => Object.hash(row, column);
 }
 
+const List<BoardPosition> _cardinalDirections = [
+  BoardPosition(row: -1, column: 0),
+  BoardPosition(row: 1, column: 0),
+  BoardPosition(row: 0, column: -1),
+  BoardPosition(row: 0, column: 1),
+];
+
+class GameSnapshot {
+  GameSnapshot({
+    required this.playerPosition,
+    required Set<BoardPosition> brickPositions,
+    required this.stepCount,
+  }) : brickPositions = Set<BoardPosition>.from(brickPositions);
+
+  final BoardPosition playerPosition;
+  final Set<BoardPosition> brickPositions;
+  final int stepCount;
+}
+
+class SokobanSearchState {
+  SokobanSearchState({
+    required this.playerPosition,
+    required Set<BoardPosition> brickPositions,
+  }) : brickPositions = Set<BoardPosition>.from(brickPositions);
+
+  final BoardPosition playerPosition;
+  final Set<BoardPosition> brickPositions;
+}
+
 class MoveIntent extends Intent {
   const MoveIntent(this.rowOffset, this.columnOffset);
 
   final int rowOffset;
   final int columnOffset;
+}
+
+class UndoIntent extends Intent {
+  const UndoIntent();
 }
 
 BoardTile tileAt(List<String> layout, int row, int column) {
@@ -124,6 +158,263 @@ Set<BoardPosition> positionsForSymbol(List<String> layout, String symbol) {
   }
 
   return positions;
+}
+
+bool isInsideLayout(List<String> layout, BoardPosition position) {
+  if (position.row < 0 || position.row >= layout.length) {
+    return false;
+  }
+
+  return position.column >= 0 && position.column < layout[position.row].length;
+}
+
+bool isFloorTile(List<String> layout, BoardPosition position) {
+  return isInsideLayout(layout, position) &&
+      tileAt(layout, position.row, position.column) != BoardTile.wall;
+}
+
+bool isSolvedState(
+  Set<BoardPosition> brickPositions,
+  Set<BoardPosition> targetPositions,
+) {
+  return targetPositions.isNotEmpty &&
+      brickPositions.length == targetPositions.length &&
+      brickPositions.every(targetPositions.contains);
+}
+
+String positionsKey(Iterable<BoardPosition> positions) {
+  final sortedPositions = positions.toList()
+    ..sort((left, right) {
+      final rowCompare = left.row.compareTo(right.row);
+      if (rowCompare != 0) {
+        return rowCompare;
+      }
+
+      return left.column.compareTo(right.column);
+    });
+
+  return sortedPositions.map((position) => '${position.row},${position.column}').join(';');
+}
+
+String searchStateKey(
+  BoardPosition playerPosition,
+  Set<BoardPosition> brickPositions,
+) {
+  return '${playerPosition.row},${playerPosition.column}|${positionsKey(brickPositions)}';
+}
+
+Set<BoardPosition> computeDeadTiles(
+  List<String> layout,
+  Set<BoardPosition> targetPositions,
+) {
+  final reachablePositions = <BoardPosition>{
+    for (final targetPosition in targetPositions)
+      if (isFloorTile(layout, targetPosition)) targetPosition,
+  };
+  final queue = ListQueue<BoardPosition>()..addAll(reachablePositions);
+
+  while (queue.isNotEmpty) {
+    final currentPosition = queue.removeFirst();
+
+    for (final direction in _cardinalDirections) {
+      final previousBoxPosition = currentPosition.move(
+        -direction.row,
+        -direction.column,
+      );
+      final playerSupportPosition = currentPosition.move(
+        direction.row,
+        direction.column,
+      );
+
+      if (!isFloorTile(layout, previousBoxPosition) ||
+          !isFloorTile(layout, playerSupportPosition)) {
+        continue;
+      }
+
+      if (reachablePositions.add(previousBoxPosition)) {
+        queue.add(previousBoxPosition);
+      }
+    }
+  }
+
+  final deadTiles = <BoardPosition>{};
+
+  for (var row = 0; row < layout.length; row++) {
+    for (var column = 0; column < layout[row].length; column++) {
+      final position = BoardPosition(row: row, column: column);
+      if (!isFloorTile(layout, position) || targetPositions.contains(position)) {
+        continue;
+      }
+
+      if (!reachablePositions.contains(position)) {
+        deadTiles.add(position);
+      }
+    }
+  }
+
+  return deadTiles;
+}
+
+Set<BoardPosition> computeReachableFloors(
+  List<String> layout,
+  BoardPosition startPosition,
+  Set<BoardPosition> brickPositions,
+) {
+  if (!isFloorTile(layout, startPosition) || brickPositions.contains(startPosition)) {
+    return <BoardPosition>{};
+  }
+
+  final reachablePositions = <BoardPosition>{startPosition};
+  final queue = ListQueue<BoardPosition>()..add(startPosition);
+
+  while (queue.isNotEmpty) {
+    final currentPosition = queue.removeFirst();
+
+    for (final direction in _cardinalDirections) {
+      final nextPosition = currentPosition.move(direction.row, direction.column);
+      if (!isFloorTile(layout, nextPosition) ||
+          brickPositions.contains(nextPosition) ||
+          !reachablePositions.add(nextPosition)) {
+        continue;
+      }
+
+      queue.add(nextPosition);
+    }
+  }
+
+  return reachablePositions;
+}
+
+bool formsFrozenSquareDeadlock(
+  List<String> layout,
+  Set<BoardPosition> brickPositions,
+  Set<BoardPosition> targetPositions,
+  BoardPosition anchorPosition,
+) {
+  final topLeftCandidates = [
+    anchorPosition,
+    anchorPosition.move(-1, 0),
+    anchorPosition.move(0, -1),
+    anchorPosition.move(-1, -1),
+  ];
+
+  for (final topLeft in topLeftCandidates) {
+    final square = [
+      topLeft,
+      topLeft.move(0, 1),
+      topLeft.move(1, 0),
+      topLeft.move(1, 1),
+    ];
+
+    if (square.any((position) => !isInsideLayout(layout, position))) {
+      continue;
+    }
+
+    final isFrozenSquare = square.every((position) {
+      return tileAt(layout, position.row, position.column) == BoardTile.wall ||
+          brickPositions.contains(position);
+    });
+    if (!isFrozenSquare) {
+      continue;
+    }
+
+    final hasOffTargetBrick = square.any((position) {
+      return brickPositions.contains(position) && !targetPositions.contains(position);
+    });
+    if (hasOffTargetBrick) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool isSokobanStateSolvable({
+  required List<String> layout,
+  required BoardPosition playerPosition,
+  required Set<BoardPosition> brickPositions,
+  required Set<BoardPosition> targetPositions,
+  required Set<BoardPosition> deadTiles,
+}) {
+  if (isSolvedState(brickPositions, targetPositions)) {
+    return true;
+  }
+
+  for (final brickPosition in brickPositions) {
+    if (!targetPositions.contains(brickPosition) && deadTiles.contains(brickPosition)) {
+      return false;
+    }
+  }
+
+  final visitedStates = <String>{};
+  final queue = ListQueue<SokobanSearchState>();
+  final initialState = SokobanSearchState(
+    playerPosition: playerPosition,
+    brickPositions: brickPositions,
+  );
+
+  visitedStates.add(searchStateKey(playerPosition, brickPositions));
+  queue.add(initialState);
+
+  while (queue.isNotEmpty) {
+    final state = queue.removeFirst();
+    if (isSolvedState(state.brickPositions, targetPositions)) {
+      return true;
+    }
+
+    final reachablePositions = computeReachableFloors(
+      layout,
+      state.playerPosition,
+      state.brickPositions,
+    );
+
+    for (final brickPosition in state.brickPositions) {
+      for (final direction in _cardinalDirections) {
+        final playerPushPosition = brickPosition.move(
+          -direction.row,
+          -direction.column,
+        );
+        final nextBrickPosition = brickPosition.move(
+          direction.row,
+          direction.column,
+        );
+
+        if (!reachablePositions.contains(playerPushPosition) ||
+            !isFloorTile(layout, nextBrickPosition) ||
+            state.brickPositions.contains(nextBrickPosition) ||
+            (deadTiles.contains(nextBrickPosition) &&
+                !targetPositions.contains(nextBrickPosition))) {
+          continue;
+        }
+
+        final nextBrickPositions = Set<BoardPosition>.from(state.brickPositions)
+          ..remove(brickPosition)
+          ..add(nextBrickPosition);
+        if (formsFrozenSquareDeadlock(
+          layout,
+          nextBrickPositions,
+          targetPositions,
+          nextBrickPosition,
+        )) {
+          continue;
+        }
+
+        final nextState = SokobanSearchState(
+          playerPosition: brickPosition,
+          brickPositions: nextBrickPositions,
+        );
+        final nextStateKey = searchStateKey(
+          nextState.playerPosition,
+          nextState.brickPositions,
+        );
+        if (visitedStates.add(nextStateKey)) {
+          queue.add(nextState);
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
 class MyApp extends StatelessWidget {
@@ -155,11 +446,17 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   late BoardPosition _playerPosition;
   late Set<BoardPosition> _brickPositions;
   late Set<BoardPosition> _targetPositions;
+  late Set<BoardPosition> _deadTiles;
+  final List<GameSnapshot> _moveHistory = <GameSnapshot>[];
   int _stepCount = 0;
+  String? _levelValidationMessage;
+  String? _deadlockMessage;
 
   SokobanLevel get _currentLevel => sokobanLevels[_currentLevelIndex];
 
   List<String> get _currentLayout => _currentLevel.layout;
+
+  bool get _canUndo => _moveHistory.isNotEmpty;
 
   @override
   void initState() {
@@ -176,13 +473,109 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         _boxesOnTargetCount == _targetPositions.length;
   }
 
+  GameSnapshot _createSnapshot() {
+    return GameSnapshot(
+      playerPosition: _playerPosition,
+      brickPositions: _brickPositions,
+      stepCount: _stepCount,
+    );
+  }
+
+  String? _validateLoadedLevel() {
+    final expectedColumnCount = _currentLayout.first.length;
+    if (_currentLayout.any((row) => row.length != expectedColumnCount)) {
+      return '关卡布局必须是规则矩形，每一行长度都要一致。';
+    }
+
+    if (_brickPositions.isEmpty || _targetPositions.isEmpty) {
+      return '关卡至少需要一个箱子和一个目标点。';
+    }
+
+    if (_brickPositions.length != _targetPositions.length) {
+      return '箱子数量必须与目标点数量一致。';
+    }
+
+    if (!isFloorTile(_currentLayout, _playerPosition)) {
+      return '玩家初始位置必须位于可通行地块。';
+    }
+
+    if (_brickPositions.contains(_playerPosition)) {
+      return '玩家初始位置不能和箱子重叠。';
+    }
+
+    for (final brickPosition in _brickPositions) {
+      if (!_targetPositions.contains(brickPosition) && _deadTiles.contains(brickPosition)) {
+        return '当前关卡开局就有箱子落在死格，初始状态无解。';
+      }
+    }
+
+    if (!isSokobanStateSolvable(
+      layout: _currentLayout,
+      playerPosition: _playerPosition,
+      brickPositions: _brickPositions,
+      targetPositions: _targetPositions,
+      deadTiles: _deadTiles,
+    )) {
+      return '当前关卡初始状态无解，请调整箱子或目标点。';
+    }
+
+    return null;
+  }
+
+  String? _detectDeadlock({
+    required BoardPosition playerPosition,
+    required Set<BoardPosition> brickPositions,
+    BoardPosition? movedBrickPosition,
+  }) {
+    if (isSolvedState(brickPositions, _targetPositions)) {
+      return null;
+    }
+
+    for (final brickPosition in brickPositions) {
+      if (!_targetPositions.contains(brickPosition) && _deadTiles.contains(brickPosition)) {
+        return '箱子被推入死格，当前状态已无解，建议撤销或重置。';
+      }
+    }
+
+    if (movedBrickPosition != null &&
+        formsFrozenSquareDeadlock(
+          _currentLayout,
+          brickPositions,
+          _targetPositions,
+          movedBrickPosition,
+        )) {
+      return '箱子形成 2x2 锁死块，当前状态已无解，建议撤销或重置。';
+    }
+
+    if (!isSokobanStateSolvable(
+      layout: _currentLayout,
+      playerPosition: playerPosition,
+      brickPositions: brickPositions,
+      targetPositions: _targetPositions,
+      deadTiles: _deadTiles,
+    )) {
+      return '当前箱子组合已互锁，继续推进不会过关，建议撤销或重置。';
+    }
+
+    return null;
+  }
+
   void _loadLevel(int levelIndex) {
     final level = sokobanLevels[levelIndex];
     _currentLevelIndex = levelIndex;
     _playerPosition = level.initialPlayerPosition;
     _brickPositions = positionsForSymbol(level.layout, 'B');
     _targetPositions = positionsForSymbol(level.layout, 'T');
+    _deadTiles = computeDeadTiles(level.layout, _targetPositions);
+    _moveHistory.clear();
     _stepCount = 0;
+    _levelValidationMessage = _validateLoadedLevel();
+    _deadlockMessage = _levelValidationMessage == null
+        ? _detectDeadlock(
+            playerPosition: _playerPosition,
+            brickPositions: _brickPositions,
+          )
+        : null;
   }
 
   void _resetCurrentLevel() {
@@ -203,7 +596,31 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     });
   }
 
+  void _undoMove() {
+    if (!_canUndo) {
+      return;
+    }
+
+    setState(() {
+      final snapshot = _moveHistory.removeLast();
+      _playerPosition = snapshot.playerPosition;
+      _brickPositions = Set<BoardPosition>.from(snapshot.brickPositions);
+      _stepCount = snapshot.stepCount;
+      _deadlockMessage = _levelValidationMessage == null
+          ? _detectDeadlock(
+              playerPosition: _playerPosition,
+              brickPositions: _brickPositions,
+            )
+          : null;
+    });
+  }
+
   void _movePlayer(int rowOffset, int columnOffset) {
+    if (_levelValidationMessage != null) {
+      return;
+    }
+
+    final snapshot = _createSnapshot();
     final nextPosition = _playerPosition.move(rowOffset, columnOffset);
     if (_isBrickAt(nextPosition)) {
       final nextBrickPosition = nextPosition.move(rowOffset, columnOffset);
@@ -211,12 +628,21 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         return;
       }
 
+      final nextBrickPositions = Set<BoardPosition>.from(_brickPositions)
+        ..remove(nextPosition)
+        ..add(nextBrickPosition);
+      final nextDeadlockMessage = _detectDeadlock(
+        playerPosition: nextPosition,
+        brickPositions: nextBrickPositions,
+        movedBrickPosition: nextBrickPosition,
+      );
+
       setState(() {
-        _brickPositions
-          ..remove(nextPosition)
-          ..add(nextBrickPosition);
+        _moveHistory.add(snapshot);
+        _brickPositions = nextBrickPositions;
         _playerPosition = nextPosition;
         _stepCount += 1;
+        _deadlockMessage = nextDeadlockMessage;
       });
       return;
     }
@@ -226,6 +652,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     }
 
     setState(() {
+      _moveHistory.add(snapshot);
       _playerPosition = nextPosition;
       _stepCount += 1;
     });
@@ -257,6 +684,22 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   Widget build(BuildContext context) {
     final boxesOnTargetCount = _boxesOnTargetCount;
     final isLevelComplete = _isLevelComplete;
+    final hasBlockingIssue = _levelValidationMessage != null || _deadlockMessage != null;
+    final statusMessage = isLevelComplete
+      ? '全部箱子已到目标点，过关！'
+      : _levelValidationMessage ??
+        _deadlockMessage ??
+        '把所有箱子推到圆形目标点即可过关。';
+    final statusColor = isLevelComplete
+      ? const Color(0xFFDDEFD8)
+      : hasBlockingIssue
+        ? const Color(0xFFF6D7D1)
+        : const Color(0xFFE9E1CF);
+    final statusBorderColor = isLevelComplete
+      ? const Color(0xFF5B8A55)
+      : hasBlockingIssue
+        ? const Color(0xFFB05D51)
+        : const Color(0xFFC2B79D);
 
     Widget buildStatCard({required String label, required String value}) {
       return Container(
@@ -299,6 +742,11 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         ),
         actions: [
           IconButton(
+            tooltip: '撤销一步',
+            onPressed: _canUndo ? _undoMove : null,
+            icon: const Icon(Icons.undo),
+          ),
+          IconButton(
             tooltip: '重置本关',
             onPressed: _resetCurrentLevel,
             icon: const Icon(Icons.refresh),
@@ -316,12 +764,20 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
             SingleActivator(LogicalKeyboardKey.keyS): MoveIntent(1, 0),
             SingleActivator(LogicalKeyboardKey.keyA): MoveIntent(0, -1),
             SingleActivator(LogicalKeyboardKey.keyD): MoveIntent(0, 1),
+            SingleActivator(LogicalKeyboardKey.keyZ): UndoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyZ, control: true): UndoIntent(),
           },
           child: Actions(
             actions: <Type, Action<Intent>>{
               MoveIntent: CallbackAction<MoveIntent>(
                 onInvoke: (intent) {
                   _movePlayer(intent.rowOffset, intent.columnOffset);
+                  return null;
+                },
+              ),
+              UndoIntent: CallbackAction<UndoIntent>(
+                onInvoke: (intent) {
+                  _undoMove();
                   return null;
                 },
               ),
@@ -403,6 +859,18 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     Row(
                       children: [
                         Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _canUndo ? _undoMove : null,
+                            icon: const Icon(Icons.undo),
+                            label: const Text('撤销一步'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
                           child: buildStatCard(
                             label: '关卡',
                             value: '${_currentLevelIndex + 1}/${sokobanLevels.length}',
@@ -430,20 +898,14 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: isLevelComplete
-                            ? const Color(0xFFDDEFD8)
-                            : const Color(0xFFE9E1CF),
+                        color: statusColor,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isLevelComplete
-                              ? const Color(0xFF5B8A55)
-                              : const Color(0xFFC2B79D),
+                          color: statusBorderColor,
                         ),
                       ),
                       child: Text(
-                        isLevelComplete
-                            ? '全部箱子已到目标点，过关！'
-                            : '把所有箱子推到圆形目标点即可过关。',
+                        statusMessage,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
