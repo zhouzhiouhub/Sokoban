@@ -37,27 +37,31 @@ const List<SokobanLevel> sokobanLevels = [
   SokobanLevel(
     name: '第 2 关',
     layout: [
-      '#######',
-      '#  T  #',
-      '#  B  #',
-      '#     #',
-      '#     #',
-      '#######',
+      '########',
+      '#      #',
+      '# B    #',
+      '#     T#',
+      '#      #',
+      '#      #',
+      '#  #   #',
+      '########',
     ],
-    initialPlayerPosition: BoardPosition(row: 3, column: 3),
+    initialPlayerPosition: BoardPosition(row: 5, column: 1),
   ),
   SokobanLevel(
     name: '第 3 关',
     layout: [
-      '########',
-      '#   T  #',
-      '#   B  #',
-      '#      #',
-      '#  B T #',
-      '#      #',
-      '########',
+      '#########',
+      '# #   T #',
+      '#     # #',
+      '# T#    #',
+      '#    B  #',
+      '# B #   #',
+      '#   #   #',
+      '# #   # #',
+      '#########',
     ],
-    initialPlayerPosition: BoardPosition(row: 5, column: 3),
+    initialPlayerPosition: BoardPosition(row: 4, column: 1),
   ),
   SokobanLevel(
     name: '挑战关',
@@ -221,9 +225,9 @@ Set<BoardPosition> computeDeadTiles(
         -direction.row,
         -direction.column,
       );
-      final playerSupportPosition = currentPosition.move(
-        direction.row,
-        direction.column,
+      final playerSupportPosition = previousBoxPosition.move(
+        -direction.row,
+        -direction.column,
       );
 
       if (!isFloorTile(layout, previousBoxPosition) ||
