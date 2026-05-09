@@ -7,21 +7,73 @@ void main() {
   runApp(const MyApp());
 }
 
-const List<String> boardLayout = [
-  '##########',
-  '#   B   T#',
-  '#  ####  #',
-  '#  #  #  #',
-  '#  # B####',
-  '#  # T   #',
-  '#  ### # #',
-  '# T B  # #',
-  '##########',
-];
-
-const BoardPosition initialPlayerPosition = BoardPosition(row: 1, column: 1);
-
 enum BoardTile { wall, floor, brick }
+
+class SokobanLevel {
+  const SokobanLevel({
+    required this.name,
+    required this.layout,
+    required this.initialPlayerPosition,
+  });
+
+  final String name;
+  final List<String> layout;
+  final BoardPosition initialPlayerPosition;
+}
+
+const List<SokobanLevel> sokobanLevels = [
+  SokobanLevel(
+    name: '第 1 关',
+    layout: [
+      '#######',
+      '#     #',
+      '# B T #',
+      '#     #',
+      '#######',
+    ],
+    initialPlayerPosition: BoardPosition(row: 2, column: 1),
+  ),
+  SokobanLevel(
+    name: '第 2 关',
+    layout: [
+      '#######',
+      '#  T  #',
+      '#  B  #',
+      '#     #',
+      '#     #',
+      '#######',
+    ],
+    initialPlayerPosition: BoardPosition(row: 3, column: 3),
+  ),
+  SokobanLevel(
+    name: '第 3 关',
+    layout: [
+      '########',
+      '#   T  #',
+      '#   B  #',
+      '#      #',
+      '#  B T #',
+      '#      #',
+      '########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 5, column: 3),
+  ),
+  SokobanLevel(
+    name: '挑战关',
+    layout: [
+      '##########',
+      '#   B   T#',
+      '#  ####  #',
+      '#  #  #  #',
+      '#  # B####',
+      '#  # T   #',
+      '#  ### # #',
+      '# T B  # #',
+      '##########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 1, column: 1),
+  ),
+];
 
 class BoardPosition {
   const BoardPosition({required this.row, required this.column});
@@ -99,9 +151,21 @@ class SokobanWallPage extends StatefulWidget {
 }
 
 class _SokobanWallPageState extends State<SokobanWallPage> {
-  BoardPosition _playerPosition = initialPlayerPosition;
-  late final Set<BoardPosition> _brickPositions = positionsForSymbol(boardLayout, 'B');
-  late final Set<BoardPosition> _targetPositions = positionsForSymbol(boardLayout, 'T');
+  int _currentLevelIndex = 0;
+  late BoardPosition _playerPosition;
+  late Set<BoardPosition> _brickPositions;
+  late Set<BoardPosition> _targetPositions;
+  int _stepCount = 0;
+
+  SokobanLevel get _currentLevel => sokobanLevels[_currentLevelIndex];
+
+  List<String> get _currentLayout => _currentLevel.layout;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLevel(0);
+  }
 
   int get _boxesOnTargetCount {
     return _brickPositions.where(_targetPositions.contains).length;
@@ -110,6 +174,33 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   bool get _isLevelComplete {
     return _targetPositions.isNotEmpty &&
         _boxesOnTargetCount == _targetPositions.length;
+  }
+
+  void _loadLevel(int levelIndex) {
+    final level = sokobanLevels[levelIndex];
+    _currentLevelIndex = levelIndex;
+    _playerPosition = level.initialPlayerPosition;
+    _brickPositions = positionsForSymbol(level.layout, 'B');
+    _targetPositions = positionsForSymbol(level.layout, 'T');
+    _stepCount = 0;
+  }
+
+  void _resetCurrentLevel() {
+    setState(() {
+      _loadLevel(_currentLevelIndex);
+    });
+  }
+
+  void _changeLevel(int levelIndex) {
+    if (levelIndex < 0 ||
+        levelIndex >= sokobanLevels.length ||
+        levelIndex == _currentLevelIndex) {
+      return;
+    }
+
+    setState(() {
+      _loadLevel(levelIndex);
+    });
   }
 
   void _movePlayer(int rowOffset, int columnOffset) {
@@ -125,6 +216,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
           ..remove(nextPosition)
           ..add(nextBrickPosition);
         _playerPosition = nextPosition;
+        _stepCount += 1;
       });
       return;
     }
@@ -135,6 +227,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
 
     setState(() {
       _playerPosition = nextPosition;
+      _stepCount += 1;
     });
   }
 
@@ -143,16 +236,17 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       return false;
     }
 
-    final nextTile = tileAt(boardLayout, position.row, position.column);
+    final nextTile = tileAt(_currentLayout, position.row, position.column);
     return nextTile != BoardTile.wall && !_isBrickAt(position);
   }
 
   bool _isInsideBoard(BoardPosition position) {
-    if (position.row < 0 || position.row >= boardLayout.length) {
+    if (position.row < 0 || position.row >= _currentLayout.length) {
       return false;
     }
 
-    return position.column >= 0 && position.column < boardLayout[position.row].length;
+    return position.column >= 0 &&
+        position.column < _currentLayout[position.row].length;
   }
 
   bool _isBrickAt(BoardPosition position) {
@@ -164,12 +258,52 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     final boxesOnTargetCount = _boxesOnTargetCount;
     final isLevelComplete = _isLevelComplete;
 
+    Widget buildStatCard({required String label, required String value}) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD9CFBB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: const Color(0xFF756B58),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2EFE7),
       appBar: AppBar(
         backgroundColor: const Color(0xFF526652),
         foregroundColor: Colors.white,
-        title: Text(isLevelComplete ? '推箱子 - 已过关' : '推箱子 - 目标点'),
+        title: Text(
+          isLevelComplete
+              ? '推箱子 - ${_currentLevel.name} 已过关'
+              : '推箱子 - ${_currentLevel.name}',
+        ),
+        actions: [
+          IconButton(
+            tooltip: '重置本关',
+            onPressed: _resetCurrentLevel,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Shortcuts(
@@ -202,7 +336,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final boardRatio =
-                              boardLayout.first.length / boardLayout.length;
+                              _currentLayout.first.length / _currentLayout.length;
                           final boardWidth = math.min(
                             constraints.maxWidth,
                             constraints.maxHeight * boardRatio,
@@ -214,7 +348,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                               child: AspectRatio(
                                 aspectRatio: boardRatio,
                                 child: SokobanBoard(
-                                  layout: boardLayout,
+                                  layout: _currentLayout,
                                   brickPositions: _brickPositions,
                                   targetPositions: _targetPositions,
                                   playerPosition: _playerPosition,
@@ -226,10 +360,66 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      '目标点进度：$boxesOnTargetCount/${_targetPositions.length}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            initialValue: _currentLevelIndex,
+                            decoration: const InputDecoration(
+                              labelText: '切换关卡',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 16,
+                              ),
+                            ),
+                            items: [
+                              for (var index = 0; index < sokobanLevels.length; index++)
+                                DropdownMenuItem<int>(
+                                  value: index,
+                                  child: Text(sokobanLevels[index].name),
+                                ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                _changeLevel(value);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          onPressed: _resetCurrentLevel,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(108, 56),
+                          ),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('重置'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: buildStatCard(
+                            label: '关卡',
+                            value: '${_currentLevelIndex + 1}/${sokobanLevels.length}',
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: buildStatCard(label: '步数', value: '$_stepCount'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: buildStatCard(
+                            label: '进度',
+                            value: '$boxesOnTargetCount/${_targetPositions.length}',
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     AnimatedContainer(
@@ -258,6 +448,24 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                     ),
+                    if (isLevelComplete) ...[
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _currentLevelIndex < sokobanLevels.length - 1
+                            ? () => _changeLevel(_currentLevelIndex + 1)
+                            : _resetCurrentLevel,
+                        icon: Icon(
+                          _currentLevelIndex < sokobanLevels.length - 1
+                              ? Icons.skip_next
+                              : Icons.replay,
+                        ),
+                        label: Text(
+                          _currentLevelIndex < sokobanLevels.length - 1
+                              ? '进入下一关'
+                              : '重玩本关',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     MovementControls(
                       onUp: () => _movePlayer(-1, 0),
