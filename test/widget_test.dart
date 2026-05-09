@@ -1,21 +1,73 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 
-import 'package:app/main.dart';
+import 'package:app/src/game/sokoban_rules.dart';
+import 'package:app/src/levels/sokoban_levels.dart';
+import 'package:app/src/sokoban_app.dart';
+import 'package:app/src/ui/sokoban_board.dart';
 
 void main() {
-  test('wall layout is a fixed rectangular grid', () {
-    expect(wallLayout.length, 9);
-    expect(wallLayout.every((row) => row.length == 10), isTrue);
+  test('has twenty designed levels with valid basic structure', () {
+    expect(sokobanLevels.length, 20);
+
+    for (final level in sokobanLevels) {
+      final expectedColumnCount = level.layout.first.length;
+      final bricks = positionsForSymbol(level.layout, 'B');
+      final targets = positionsForSymbol(level.layout, 'T');
+
+      expect(
+        level.layout.every((row) => row.length == expectedColumnCount),
+        isTrue,
+        reason: '${level.displayName} must be rectangular.',
+      );
+      expect(
+        bricks.length,
+        targets.length,
+        reason:
+            '${level.displayName} must have matching box and target counts.',
+      );
+      expect(
+        isFloorTile(level.layout, level.initialPlayerPosition),
+        isTrue,
+        reason: '${level.displayName} player must start on a floor tile.',
+      );
+      expect(
+        bricks.contains(level.initialPlayerPosition),
+        isFalse,
+        reason: '${level.displayName} player must not start on a box.',
+      );
+    }
   });
 
-  testWidgets('renders the initial Sokoban wall layout', (tester) async {
-    await tester.pumpWidget(const MyApp());
+  test('sampled levels are solvable by the game rules', () {
+    for (final index in [0, 9, 19]) {
+      final level = sokobanLevels[index];
+      final bricks = positionsForSymbol(level.layout, 'B');
+      final targets = positionsForSymbol(level.layout, 'T');
+      final deadTiles = computeDeadTiles(level.layout, targets);
 
-    expect(find.text('推箱子 - 墙体'), findsOneWidget);
+      expect(
+        isSokobanStateSolvable(
+          layout: level.layout,
+          playerPosition: level.initialPlayerPosition,
+          brickPositions: bricks,
+          targetPositions: targets,
+          deadTiles: deadTiles,
+        ),
+        isTrue,
+        reason: '${level.displayName} should be solvable.',
+      );
+    }
+  });
+
+  testWidgets('renders the first Sokoban level', (tester) async {
+    await tester.pumpWidget(const SokobanApp());
+
+    expect(find.text('推箱子 - Level 1 — 第一份货物'), findsOneWidget);
     expect(find.byType(SokobanBoard), findsOneWidget);
-    expect(_tilesWithPrefix('wall-'), findsNWidgets(wallTileCount));
-    expect(_tilesWithPrefix('floor-'), findsNWidgets(floorTileCount));
+    expect(_tilesWithPrefix('wall-'), findsNWidgets(20));
+    expect(_tilesWithPrefix('brick-'), findsNWidgets(1));
+    expect(_tilesWithPrefix('floor-'), findsNWidgets(14));
   });
 }
 

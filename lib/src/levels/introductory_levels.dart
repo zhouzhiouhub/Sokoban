@@ -1,0 +1,100 @@
+import '../models/board_position.dart';
+import '../models/sokoban_level.dart';
+import 'level_copy.dart';
+
+final List<SokobanLevel> introductoryLevels = [
+  SokobanLevel(
+    number: 1,
+    title: levelCopy[0].title,
+    description: levelCopy[0].description,
+    layout: ['#######', '#     #', '# B T #', '#     #', '#######'],
+    initialPlayerPosition: BoardPosition(row: 2, column: 1),
+  ),
+  SokobanLevel(
+    number: 2,
+    title: levelCopy[1].title,
+    description: levelCopy[1].description,
+    layout: [
+      '########',
+      '#     T#',
+      '#  ### #',
+      '#  B   #',
+      '#      #',
+      '########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 1),
+  ),
+  SokobanLevel(
+    number: 3,
+    title: levelCopy[2].title,
+    description: levelCopy[2].description,
+    layout: [
+      '########',
+      '#   # T#',
+      '# B    #',
+      '#   #  #',
+      '#      #',
+      '########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 1),
+  ),
+  SokobanLevel(
+    number: 4,
+    title: levelCopy[3].title,
+    description: levelCopy[3].description,
+    layout: [
+      '#########',
+      '#   T   #',
+      '#   B   #',
+      '#   B T #',
+      '#       #',
+      '#########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 3, column: 2),
+  ),
+  SokobanLevel(
+    number: 5,
+    title: levelCopy[4].title,
+    description: levelCopy[4].description,
+    layout: [
+      '#########',
+      '#      T#',
+      '### ### #',
+      '#   B   #',
+      '#   ### #',
+      '#       #',
+      '#########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 1, column: 1),
+  ),
+  SokobanLevel(
+    number: 6,
+    title: levelCopy[5].title,
+    description: levelCopy[5].description,
+    layout: [
+      '#########',
+      '#   T   #',
+      '#  ###  #',
+      '# B   B #',
+      '#       #',
+      '#   T   #',
+      '#########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 4),
+  ),
+  SokobanLevel(
+    number: 7,
+    title: levelCopy[6].title,
+    description: levelCopy[6].description,
+    layout: [
+      '##########',
+      '# T   T  #',
+      '#   ##   #',
+      '# B  B   #',
+      '#      B #',
+      '#    T   #',
+      '##########',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 4),
+  ),
+];
