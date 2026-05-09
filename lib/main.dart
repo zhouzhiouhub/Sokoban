@@ -32,6 +32,18 @@ class BoardPosition {
   BoardPosition move(int rowOffset, int columnOffset) {
     return BoardPosition(row: row + rowOffset, column: column + columnOffset);
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+
+    return other is BoardPosition && other.row == row && other.column == column;
+  }
+
+  @override
+  int get hashCode => Object.hash(row, column);
 }
 
 class MoveIntent extends Intent {
@@ -44,9 +56,22 @@ class MoveIntent extends Intent {
 BoardTile tileAt(List<String> layout, int row, int column) {
   return switch (layout[row][column]) {
     '#' => BoardTile.wall,
-    'B' => BoardTile.brick,
     _ => BoardTile.floor,
   };
+}
+
+Set<BoardPosition> initialBrickPositions(List<String> layout) {
+  final brickPositions = <BoardPosition>{};
+
+  for (var row = 0; row < layout.length; row++) {
+    for (var column = 0; column < layout[row].length; column++) {
+      if (layout[row][column] == 'B') {
+        brickPositions.add(BoardPosition(row: row, column: column));
+      }
+    }
+  }
+
+  return brickPositions;
 }
 
 class MyApp extends StatelessWidget {
@@ -75,10 +100,26 @@ class SokobanWallPage extends StatefulWidget {
 
 class _SokobanWallPageState extends State<SokobanWallPage> {
   BoardPosition _playerPosition = initialPlayerPosition;
+  late final Set<BoardPosition> _brickPositions = initialBrickPositions(boardLayout);
 
   void _movePlayer(int rowOffset, int columnOffset) {
     final nextPosition = _playerPosition.move(rowOffset, columnOffset);
-    if (!_isWalkable(nextPosition)) {
+    if (_isBrickAt(nextPosition)) {
+      final nextBrickPosition = nextPosition.move(rowOffset, columnOffset);
+      if (!_isWalkableFloor(nextBrickPosition)) {
+        return;
+      }
+
+      setState(() {
+        _brickPositions
+          ..remove(nextPosition)
+          ..add(nextBrickPosition);
+        _playerPosition = nextPosition;
+      });
+      return;
+    }
+
+    if (!_isWalkableFloor(nextPosition)) {
       return;
     }
 
@@ -87,17 +128,25 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     });
   }
 
-  bool _isWalkable(BoardPosition position) {
-    if (position.row < 0 || position.row >= boardLayout.length) {
-      return false;
-    }
-
-    if (position.column < 0 || position.column >= boardLayout[position.row].length) {
+  bool _isWalkableFloor(BoardPosition position) {
+    if (!_isInsideBoard(position)) {
       return false;
     }
 
     final nextTile = tileAt(boardLayout, position.row, position.column);
-    return nextTile != BoardTile.wall && nextTile != BoardTile.brick;
+    return nextTile != BoardTile.wall && !_isBrickAt(position);
+  }
+
+  bool _isInsideBoard(BoardPosition position) {
+    if (position.row < 0 || position.row >= boardLayout.length) {
+      return false;
+    }
+
+    return position.column >= 0 && position.column < boardLayout[position.row].length;
+  }
+
+  bool _isBrickAt(BoardPosition position) {
+    return _brickPositions.contains(position);
   }
 
   @override
@@ -153,6 +202,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                 aspectRatio: boardRatio,
                                 child: SokobanBoard(
                                   layout: boardLayout,
+                                  brickPositions: _brickPositions,
                                   playerPosition: _playerPosition,
                                 ),
                               ),
@@ -163,7 +213,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      '小人只能移动到墙体内部的无砖地面，可用方向键或按钮控制。',
+                      '小人可以推动单个箱子，箱子只能被推到墙体内部的空地上。',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
@@ -188,10 +238,12 @@ class SokobanBoard extends StatelessWidget {
   const SokobanBoard({
     super.key,
     required this.layout,
+    required this.brickPositions,
     required this.playerPosition,
   });
 
   final List<String> layout;
+  final Set<BoardPosition> brickPositions;
   final BoardPosition playerPosition;
 
   @override
@@ -211,7 +263,10 @@ class SokobanBoard extends StatelessWidget {
                     Expanded(
                       child: Builder(
                         builder: (context) {
-                          final tile = tileAt(layout, row, column);
+                          final position = BoardPosition(row: row, column: column);
+                          final tile = brickPositions.contains(position)
+                              ? BoardTile.brick
+                              : tileAt(layout, row, column);
                           final hasPlayer =
                               playerPosition.row == row &&
                               playerPosition.column == column;
