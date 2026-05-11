@@ -238,7 +238,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     }
 
     final nextTile = tileAt(_currentLayout, position.row, position.column);
-    return nextTile != BoardTile.wall && !_isBrickAt(position);
+    return nextTile == BoardTile.floor && !_isBrickAt(position);
   }
 
   bool _isInsideBoard(BoardPosition position) {

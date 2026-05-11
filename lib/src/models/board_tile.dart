@@ -1,1 +1,1 @@
-enum BoardTile { wall, floor, brick }
+enum BoardTile { empty, wall, floor, brick }

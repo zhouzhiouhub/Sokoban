@@ -16,7 +16,17 @@ class SokobanTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tile == BoardTile.empty) {
+      return Semantics(
+        label: '空白区域',
+        child: const DecoratedBox(
+          decoration: BoxDecoration(color: Color(0xFFE3DBC9)),
+        ),
+      );
+    }
+
     final semanticsLabel = switch ((tile, isTarget, hasPlayer)) {
+      (BoardTile.empty, _, _) => '空白区域',
       (BoardTile.wall, _, _) => '墙体',
       (BoardTile.brick, true, _) => '目标点上的箱子',
       (BoardTile.brick, false, _) => '箱子',

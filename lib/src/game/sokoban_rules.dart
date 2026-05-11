@@ -22,6 +22,7 @@ class SokobanSearchState {
 
 BoardTile tileAt(List<String> layout, int row, int column) {
   return switch (layout[row][column]) {
+    '_' => BoardTile.empty,
     '#' => BoardTile.wall,
     _ => BoardTile.floor,
   };
@@ -51,7 +52,7 @@ bool isInsideLayout(List<String> layout, BoardPosition position) {
 
 bool isFloorTile(List<String> layout, BoardPosition position) {
   return isInsideLayout(layout, position) &&
-      tileAt(layout, position.row, position.column) != BoardTile.wall;
+      tileAt(layout, position.row, position.column) == BoardTile.floor;
 }
 
 bool isSolvedState(
@@ -200,7 +201,7 @@ bool formsFrozenSquareDeadlock(
     }
 
     final isFrozenSquare = square.every((position) {
-      return tileAt(layout, position.row, position.column) == BoardTile.wall ||
+      return tileAt(layout, position.row, position.column) != BoardTile.floor ||
           brickPositions.contains(position);
     });
     if (!isFrozenSquare) {
