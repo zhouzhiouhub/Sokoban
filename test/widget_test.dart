@@ -39,9 +39,22 @@ void main() {
     }
   });
 
-  test('sampled levels are solvable by the game rules', () {
-    for (final index in [0, 9, 19]) {
-      final level = sokobanLevels[index];
+  test('level layouts are unique', () {
+    final layoutKeys = <String>{};
+
+    for (final level in sokobanLevels) {
+      final layoutKey = level.layout.join('\n');
+
+      expect(
+        layoutKeys.add(layoutKey),
+        isTrue,
+        reason: '${level.displayName} must not duplicate another layout.',
+      );
+    }
+  });
+
+  test('all levels are solvable by the game rules', () {
+    for (final level in sokobanLevels) {
       final bricks = positionsForSymbol(level.layout, 'B');
       final targets = positionsForSymbol(level.layout, 'T');
       final deadTiles = computeDeadTiles(level.layout, targets);
