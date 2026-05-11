@@ -23,7 +23,6 @@ class SokobanWallPage extends StatefulWidget {
 }
 
 class _SokobanWallPageState extends State<SokobanWallPage> {
-  static const double _preferredBoardTileSize = 44;
   static const double _boardHeaderHeight = 48;
   static const double _boardHeaderGap = 8;
 
@@ -43,14 +42,8 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
 
   bool get _canUndo => _moveHistory.isNotEmpty;
 
-  int get _maxLevelColumnCount {
-    return sokobanLevels
-        .map((level) => level.layout.first.length)
-        .reduce(math.max);
-  }
-
-  int get _maxLevelRowCount {
-    return sokobanLevels.map((level) => level.layout.length).reduce(math.max);
+  double get _boardAspectRatio {
+    return SokobanBoard.fixedColumnCount / SokobanBoard.fixedRowCount;
   }
 
   @override
@@ -372,28 +365,19 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final currentColumnCount =
-                              _currentLayout.first.length;
-                          final currentRowCount = _currentLayout.length;
                           final double availableBoardHeight = math.max(
                             0.0,
                             constraints.maxHeight -
                                 _boardHeaderHeight -
                                 _boardHeaderGap,
                           );
-                          final double tileSize = math.max(
-                            0.0,
-                            math.min(
-                              _preferredBoardTileSize,
-                              math.min(
-                                constraints.maxWidth / _maxLevelColumnCount,
-                                availableBoardHeight / _maxLevelRowCount,
-                              ),
-                            ),
+                          final boardAspectRatio = _boardAspectRatio;
+                          final double boardWidth = math.min(
+                            constraints.maxWidth,
+                            availableBoardHeight * boardAspectRatio,
                           );
-                          final double boardWidth =
-                              currentColumnCount * tileSize;
-                          final double boardHeight = currentRowCount * tileSize;
+                          final double boardHeight =
+                              boardWidth / boardAspectRatio;
 
                           return Center(
                             child: Column(

@@ -94,7 +94,7 @@ void main() {
     await tester.tap(find.text('1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('推箱子 - Level 1 — 第一份货物'), findsOneWidget);
+    expect(find.text('推箱子 - 第一份货物'), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
     expect(_tilesWithPrefix('wall-'), findsNWidgets(20));

@@ -14,6 +14,9 @@ class SokobanBoard extends StatelessWidget {
     required this.playerPosition,
   });
 
+  static const int fixedRowCount = 10;
+  static const int fixedColumnCount = 15;
+
   final List<String> layout;
   final Set<BoardPosition> brickPositions;
   final Set<BoardPosition> targetPositions;
@@ -21,6 +24,9 @@ class SokobanBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rowOffset = ((fixedRowCount - layout.length) / 2).floor();
+    final columnOffset = ((fixedColumnCount - layout.first.length) / 2).floor();
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFE3DBC9),
@@ -28,14 +34,30 @@ class SokobanBoard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var row = 0; row < layout.length; row++)
+          for (var viewportRow = 0; viewportRow < fixedRowCount; viewportRow++)
             Expanded(
               child: Row(
                 children: [
-                  for (var column = 0; column < layout[row].length; column++)
+                  for (
+                    var viewportColumn = 0;
+                    viewportColumn < fixedColumnCount;
+                    viewportColumn++
+                  )
                     Expanded(
                       child: Builder(
                         builder: (context) {
+                          final row = viewportRow - rowOffset;
+                          final column = viewportColumn - columnOffset;
+                          final isLevelCell =
+                              row >= 0 &&
+                              row < layout.length &&
+                              column >= 0 &&
+                              column < layout[row].length;
+
+                          if (!isLevelCell) {
+                            return const _EmptyBoardCell();
+                          }
+
                           final position = BoardPosition(
                             row: row,
                             column: column,
@@ -63,6 +85,22 @@ class SokobanBoard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyBoardCell extends StatelessWidget {
+  const _EmptyBoardCell();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color(0xFFE3DBC9),
+        border: Border.fromBorderSide(
+          BorderSide(color: Color(0xFFD3C9B6), width: 0.7),
+        ),
       ),
     );
   }
