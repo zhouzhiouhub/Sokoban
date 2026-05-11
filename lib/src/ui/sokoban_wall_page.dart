@@ -110,21 +110,10 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       }
     }
 
-    if (!isSokobanStateSolvable(
-      layout: _currentLayout,
-      playerPosition: _playerPosition,
-      brickPositions: _brickPositions,
-      targetPositions: _targetPositions,
-      deadTiles: _deadTiles,
-    )) {
-      return '当前关卡初始状态无解，请调整箱子或目标点。';
-    }
-
     return null;
   }
 
   String? _detectDeadlock({
-    required BoardPosition playerPosition,
     required Set<BoardPosition> brickPositions,
     BoardPosition? movedBrickPosition,
   }) {
@@ -149,16 +138,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       return '箱子形成 2x2 锁死块，当前状态已无解，建议撤销或重置。';
     }
 
-    if (!isSokobanStateSolvable(
-      layout: _currentLayout,
-      playerPosition: playerPosition,
-      brickPositions: brickPositions,
-      targetPositions: _targetPositions,
-      deadTiles: _deadTiles,
-    )) {
-      return '当前箱子组合已互锁，继续推进不会过关，建议撤销或重置。';
-    }
-
     return null;
   }
 
@@ -173,10 +152,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     _stepCount = 0;
     _levelValidationMessage = _validateLoadedLevel();
     _deadlockMessage = _levelValidationMessage == null
-        ? _detectDeadlock(
-            playerPosition: _playerPosition,
-            brickPositions: _brickPositions,
-          )
+        ? _detectDeadlock(brickPositions: _brickPositions)
         : null;
   }
 
@@ -209,10 +185,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       _brickPositions = Set<BoardPosition>.from(snapshot.brickPositions);
       _stepCount = snapshot.stepCount;
       _deadlockMessage = _levelValidationMessage == null
-          ? _detectDeadlock(
-              playerPosition: _playerPosition,
-              brickPositions: _brickPositions,
-            )
+          ? _detectDeadlock(brickPositions: _brickPositions)
           : null;
     });
   }
@@ -234,7 +207,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         ..remove(nextPosition)
         ..add(nextBrickPosition);
       final nextDeadlockMessage = _detectDeadlock(
-        playerPosition: nextPosition,
         brickPositions: nextBrickPositions,
         movedBrickPosition: nextBrickPosition,
       );

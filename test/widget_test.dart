@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:app/src/game/sokoban_rules.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
+import 'package:app/src/models/board_position.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
 import 'package:app/src/ui/sokoban_board.dart';
@@ -54,24 +55,47 @@ void main() {
     }
   });
 
-  test('all levels are solvable by the game rules', () {
-    for (final level in sokobanLevels) {
-      final bricks = positionsForSymbol(level.layout, 'B');
-      final targets = positionsForSymbol(level.layout, 'T');
-      final deadTiles = computeDeadTiles(level.layout, targets);
+  test('first level has a known solution', () {
+    final level = sokobanLevels.single;
+    final bricks = positionsForSymbol(level.layout, 'B');
+    final targets = positionsForSymbol(level.layout, 'T');
+    var playerPosition = level.initialPlayerPosition;
 
-      expect(
-        isSokobanStateSolvable(
-          layout: level.layout,
-          playerPosition: level.initialPlayerPosition,
-          brickPositions: bricks,
-          targetPositions: targets,
-          deadTiles: deadTiles,
-        ),
-        isTrue,
-        reason: '${level.displayName} should be solvable.',
-      );
+    const solution = [
+      BoardPosition(row: -1, column: 0),
+      BoardPosition(row: -1, column: 0),
+      BoardPosition(row: 1, column: 0),
+      BoardPosition(row: 1, column: 0),
+      BoardPosition(row: 1, column: 0),
+      BoardPosition(row: -1, column: 0),
+      BoardPosition(row: 0, column: -1),
+      BoardPosition(row: 0, column: -1),
+      BoardPosition(row: 0, column: 1),
+      BoardPosition(row: 0, column: 1),
+      BoardPosition(row: 0, column: 1),
+      BoardPosition(row: 0, column: 1),
+    ];
+
+    for (final direction in solution) {
+      final nextPosition = playerPosition.move(direction.row, direction.column);
+      if (bricks.contains(nextPosition)) {
+        final nextBrickPosition = nextPosition.move(
+          direction.row,
+          direction.column,
+        );
+        expect(isFloorTile(level.layout, nextBrickPosition), isTrue);
+        expect(bricks.contains(nextBrickPosition), isFalse);
+        bricks
+          ..remove(nextPosition)
+          ..add(nextBrickPosition);
+      } else {
+        expect(isFloorTile(level.layout, nextPosition), isTrue);
+      }
+
+      playerPosition = nextPosition;
     }
+
+    expect(isSolvedState(bricks, targets), isTrue);
   });
 
   testWidgets('renders the level selection page', (tester) async {
