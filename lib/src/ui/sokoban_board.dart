@@ -55,7 +55,15 @@ class SokobanBoard extends StatelessWidget {
                               column < layout[row].length;
 
                           if (!isLevelCell) {
-                            return const _EmptyBoardCell();
+                            final isViewportBoundary =
+                                viewportRow == 0 ||
+                                viewportColumn == 0 ||
+                                viewportRow == fixedRowCount - 1 ||
+                                viewportColumn == fixedColumnCount - 1;
+
+                            return isViewportBoundary
+                                ? const _ViewportWallCell()
+                                : const _ViewportFloorCell();
                           }
 
                           final position = BoardPosition(
@@ -90,17 +98,42 @@ class SokobanBoard extends StatelessWidget {
   }
 }
 
-class _EmptyBoardCell extends StatelessWidget {
-  const _EmptyBoardCell();
+class _ViewportFloorCell extends StatelessWidget {
+  const _ViewportFloorCell();
 
   @override
   Widget build(BuildContext context) {
     return const DecoratedBox(
       decoration: BoxDecoration(
-        color: Color(0xFFE3DBC9),
+        color: Color(0xFFD8CFB9),
         border: Border.fromBorderSide(
-          BorderSide(color: Color(0xFFD3C9B6), width: 0.7),
+          BorderSide(color: Color(0xFFC9BFA8), width: 0.7),
         ),
+      ),
+    );
+  }
+}
+
+class _ViewportWallCell extends StatelessWidget {
+  const _ViewportWallCell();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '墙体',
+      child: Stack(
+        fit: StackFit.expand,
+        children: const [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0xFF3F493A),
+              border: Border.fromBorderSide(
+                BorderSide(color: Color(0xFF222820), width: 0.7),
+              ),
+            ),
+          ),
+          Center(child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14)),
+        ],
       ),
     );
   }
