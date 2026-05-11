@@ -23,6 +23,10 @@ class SokobanWallPage extends StatefulWidget {
 }
 
 class _SokobanWallPageState extends State<SokobanWallPage> {
+  static const double _preferredBoardTileSize = 44;
+  static const double _boardHeaderHeight = 48;
+  static const double _boardHeaderGap = 8;
+
   int _currentLevelIndex = 0;
   late BoardPosition _playerPosition;
   late Set<BoardPosition> _brickPositions;
@@ -38,6 +42,16 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   List<String> get _currentLayout => _currentLevel.layout;
 
   bool get _canUndo => _moveHistory.isNotEmpty;
+
+  int get _maxLevelColumnCount {
+    return sokobanLevels
+        .map((level) => level.layout.first.length)
+        .reduce(math.max);
+  }
+
+  int get _maxLevelRowCount {
+    return sokobanLevels.map((level) => level.layout.length).reduce(math.max);
+  }
 
   @override
   void initState() {
@@ -358,18 +372,28 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          const boardHeaderHeight = 48.0;
-                          final boardRatio =
-                              _currentLayout.first.length /
-                              _currentLayout.length;
-                          final boardWidth = math.min(
-                            constraints.maxWidth,
-                            math.max(
-                                  0,
-                                  constraints.maxHeight - boardHeaderHeight,
-                                ) *
-                                boardRatio,
+                          final currentColumnCount =
+                              _currentLayout.first.length;
+                          final currentRowCount = _currentLayout.length;
+                          final double availableBoardHeight = math.max(
+                            0.0,
+                            constraints.maxHeight -
+                                _boardHeaderHeight -
+                                _boardHeaderGap,
                           );
+                          final double tileSize = math.max(
+                            0.0,
+                            math.min(
+                              _preferredBoardTileSize,
+                              math.min(
+                                constraints.maxWidth / _maxLevelColumnCount,
+                                availableBoardHeight / _maxLevelRowCount,
+                              ),
+                            ),
+                          );
+                          final double boardWidth =
+                              currentColumnCount * tileSize;
+                          final double boardHeight = currentRowCount * tileSize;
 
                           return Center(
                             child: Column(
@@ -382,17 +406,15 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                     stepCount: _stepCount,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: _boardHeaderGap),
                                 SizedBox(
                                   width: boardWidth,
-                                  child: AspectRatio(
-                                    aspectRatio: boardRatio,
-                                    child: SokobanBoard(
-                                      layout: _currentLayout,
-                                      brickPositions: _brickPositions,
-                                      targetPositions: _targetPositions,
-                                      playerPosition: _playerPosition,
-                                    ),
+                                  height: boardHeight,
+                                  child: SokobanBoard(
+                                    layout: _currentLayout,
+                                    brickPositions: _brickPositions,
+                                    targetPositions: _targetPositions,
+                                    playerPosition: _playerPosition,
                                   ),
                                 ),
                               ],
