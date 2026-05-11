@@ -465,6 +465,7 @@ class _LevelControls extends StatelessWidget {
             Expanded(
               child: DropdownButtonFormField<int>(
                 initialValue: currentLevelIndex,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: '切换关卡',
                   border: OutlineInputBorder(),
@@ -479,7 +480,9 @@ class _LevelControls extends StatelessWidget {
                       value: index,
                       child: Text(
                         sokobanLevels[index].displayName,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                       ),
                     ),
                 ],
