@@ -385,10 +385,8 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _LevelControls(
-                      currentLevelIndex: _currentLevelIndex,
+                    _GameControls(
                       canUndo: _canUndo,
-                      onChangeLevel: _changeLevel,
                       onReset: _resetCurrentLevel,
                       onUndo: _undoMove,
                     ),
@@ -454,73 +452,34 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   }
 }
 
-class _LevelControls extends StatelessWidget {
-  const _LevelControls({
-    required this.currentLevelIndex,
+class _GameControls extends StatelessWidget {
+  const _GameControls({
     required this.canUndo,
-    required this.onChangeLevel,
     required this.onReset,
     required this.onUndo,
   });
 
-  final int currentLevelIndex;
   final bool canUndo;
-  final ValueChanged<int> onChangeLevel;
   final VoidCallback onReset;
   final VoidCallback onUndo;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: currentLevelIndex,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: '切换关卡',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 16,
-                  ),
-                ),
-                items: [
-                  for (var index = 0; index < sokobanLevels.length; index++)
-                    DropdownMenuItem<int>(
-                      value: index,
-                      child: Text(
-                        sokobanLevels[index].displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        softWrap: false,
-                      ),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    onChangeLevel(value);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: onReset,
-              style: FilledButton.styleFrom(minimumSize: const Size(108, 56)),
-              icon: const Icon(Icons.refresh),
-              label: const Text('重置'),
-            ),
-          ],
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: onReset,
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+            icon: const Icon(Icons.refresh),
+            label: const Text('重置'),
+          ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
+        const SizedBox(width: 12),
+        Expanded(
           child: OutlinedButton.icon(
             onPressed: canUndo ? onUndo : null,
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
             icon: const Icon(Icons.undo),
             label: const Text('撤销一步'),
           ),
