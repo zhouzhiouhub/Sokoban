@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'ui/sokoban_wall_page.dart';
+import 'ui/level_selection_page.dart';
 
 class SokobanApp extends StatelessWidget {
   const SokobanApp({super.key});
@@ -14,7 +14,7 @@ class SokobanApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF526652)),
         useMaterial3: true,
       ),
-      home: const SokobanWallPage(),
+      home: const LevelSelectionPage(),
     );
   }
 }

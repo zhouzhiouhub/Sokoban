@@ -14,7 +14,9 @@ import 'movement_controls.dart';
 import 'sokoban_board.dart';
 
 class SokobanWallPage extends StatefulWidget {
-  const SokobanWallPage({super.key});
+  const SokobanWallPage({super.key, this.initialLevelIndex = 0});
+
+  final int initialLevelIndex;
 
   @override
   State<SokobanWallPage> createState() => _SokobanWallPageState();
@@ -40,7 +42,19 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   @override
   void initState() {
     super.initState();
-    _loadLevel(0);
+    _loadLevel(_normalisedLevelIndex(widget.initialLevelIndex));
+  }
+
+  int _normalisedLevelIndex(int levelIndex) {
+    if (levelIndex < 0) {
+      return 0;
+    }
+
+    if (levelIndex >= sokobanLevels.length) {
+      return sokobanLevels.length - 1;
+    }
+
+    return levelIndex;
   }
 
   int get _boxesOnTargetCount {

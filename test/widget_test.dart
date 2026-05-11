@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:app/src/game/sokoban_rules.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
 import 'package:app/src/sokoban_app.dart';
+import 'package:app/src/ui/level_selection_page.dart';
 import 'package:app/src/ui/sokoban_board.dart';
 
 void main() {
@@ -73,8 +74,25 @@ void main() {
     }
   });
 
-  testWidgets('renders the first Sokoban level', (tester) async {
+  testWidgets('renders the level selection page', (tester) async {
     await tester.pumpWidget(const SokobanApp());
+
+    expect(find.byType(LevelSelectionPage), findsOneWidget);
+    expect(find.text('选择关卡'), findsOneWidget);
+    for (
+      var levelNumber = 1;
+      levelNumber <= sokobanLevels.length;
+      levelNumber++
+    ) {
+      expect(find.text('$levelNumber'), findsOneWidget);
+    }
+  });
+
+  testWidgets('opens a selected Sokoban level', (tester) async {
+    await tester.pumpWidget(const SokobanApp());
+
+    await tester.tap(find.text('1'));
+    await tester.pumpAndSettle();
 
     expect(find.text('推箱子 - Level 1 — 第一份货物'), findsOneWidget);
     expect(find.byType(SokobanBoard), findsOneWidget);
