@@ -3,14 +3,13 @@ import 'package:flutter/widgets.dart';
 
 import 'package:app/src/game/sokoban_rules.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
-import 'package:app/src/models/board_position.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
 import 'package:app/src/ui/sokoban_board.dart';
 
 void main() {
   test('has designed levels with valid basic structure', () {
-    expect(sokobanLevels.length, 1);
+    expect(sokobanLevels.length, 2);
 
     for (final level in sokobanLevels) {
       final expectedColumnCount = level.layout.first.length;
@@ -55,47 +54,23 @@ void main() {
     }
   });
 
-  test('first level has a known solution', () {
-    final level = sokobanLevels.single;
-    final bricks = positionsForSymbol(level.layout, 'B');
-    final targets = positionsForSymbol(level.layout, 'T');
-    var playerPosition = level.initialPlayerPosition;
+  test('designed levels are solvable', () {
+    for (final level in sokobanLevels) {
+      final bricks = positionsForSymbol(level.layout, 'B');
+      final targets = positionsForSymbol(level.layout, 'T');
 
-    const solution = [
-      BoardPosition(row: -1, column: 0),
-      BoardPosition(row: -1, column: 0),
-      BoardPosition(row: 1, column: 0),
-      BoardPosition(row: 1, column: 0),
-      BoardPosition(row: 1, column: 0),
-      BoardPosition(row: -1, column: 0),
-      BoardPosition(row: 0, column: -1),
-      BoardPosition(row: 0, column: -1),
-      BoardPosition(row: 0, column: 1),
-      BoardPosition(row: 0, column: 1),
-      BoardPosition(row: 0, column: 1),
-      BoardPosition(row: 0, column: 1),
-    ];
-
-    for (final direction in solution) {
-      final nextPosition = playerPosition.move(direction.row, direction.column);
-      if (bricks.contains(nextPosition)) {
-        final nextBrickPosition = nextPosition.move(
-          direction.row,
-          direction.column,
-        );
-        expect(isFloorTile(level.layout, nextBrickPosition), isTrue);
-        expect(bricks.contains(nextBrickPosition), isFalse);
-        bricks
-          ..remove(nextPosition)
-          ..add(nextBrickPosition);
-      } else {
-        expect(isFloorTile(level.layout, nextPosition), isTrue);
-      }
-
-      playerPosition = nextPosition;
+      expect(
+        isSokobanStateSolvable(
+          layout: level.layout,
+          playerPosition: level.initialPlayerPosition,
+          brickPositions: bricks,
+          targetPositions: targets,
+          deadTiles: computeDeadTiles(level.layout, targets),
+        ),
+        isTrue,
+        reason: '${level.displayName} must have at least one solution.',
+      );
     }
-
-    expect(isSolvedState(bricks, targets), isTrue);
   });
 
   testWidgets('renders the level selection page', (tester) async {
@@ -121,11 +96,29 @@ void main() {
     expect(find.text('推箱子 - 第一关'), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
-    expect(_tilesWithPrefix('empty-'), findsNWidgets(99));
-    expect(_tilesWithPrefix('wall-'), findsNWidgets(37));
-    expect(_tilesWithPrefix('brick-'), findsNWidgets(4));
-    expect(_tilesWithPrefix('floor-'), findsNWidgets(10));
+
+    final level = sokobanLevels.first;
+    final emptyCount = _cellCount(level.layout, '_');
+    final wallCount = _cellCount(level.layout, '#');
+    final brickCount = positionsForSymbol(level.layout, 'B').length;
+    final cellCount = level.layout.fold<int>(
+      0,
+      (count, row) => count + row.length,
+    );
+    final floorCount = cellCount - emptyCount - wallCount - brickCount;
+
+    expect(_tilesWithPrefix('empty-'), findsNWidgets(emptyCount));
+    expect(_tilesWithPrefix('wall-'), findsNWidgets(wallCount));
+    expect(_tilesWithPrefix('brick-'), findsNWidgets(brickCount));
+    expect(_tilesWithPrefix('floor-'), findsNWidgets(floorCount));
   });
+}
+
+int _cellCount(List<String> layout, String symbol) {
+  return layout.fold<int>(
+    0,
+    (count, row) => count + symbol.allMatches(row).length,
+  );
 }
 
 Finder _tilesWithPrefix(String prefix) {

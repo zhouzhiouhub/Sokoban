@@ -21,4 +21,23 @@ final List<SokobanLevel> introductoryLevels = [
     ],
     initialPlayerPosition: BoardPosition(row: 5, column: 7),
   ),
+
+  SokobanLevel(
+    number: 2,
+    title: levelCopy[1].title,
+    description: levelCopy[1].description,
+    layout: [
+      '_______________',
+      '_____#####_____',
+      '_____#   #_____',
+      '___###B#T##____',
+      '___#   B  #____',
+      '___# #  T #____',
+      '___#   B  #____',
+      '___###T####____',
+      '_____###_______',
+      '_______________',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 4),
+  ),
 ];

@@ -33,13 +33,21 @@ Set<BoardPosition> positionsForSymbol(List<String> layout, String symbol) {
 
   for (var row = 0; row < layout.length; row++) {
     for (var column = 0; column < layout[row].length; column++) {
-      if (layout[row][column] == symbol) {
+      if (_cellMatchesSymbol(layout[row][column], symbol)) {
         positions.add(BoardPosition(row: row, column: column));
       }
     }
   }
 
   return positions;
+}
+
+bool _cellMatchesSymbol(String cell, String symbol) {
+  return switch (symbol) {
+    'B' => cell == 'B' || cell == '*',
+    'T' => cell == 'T' || cell == '*',
+    _ => cell == symbol,
+  };
 }
 
 bool isInsideLayout(List<String> layout, BoardPosition position) {
