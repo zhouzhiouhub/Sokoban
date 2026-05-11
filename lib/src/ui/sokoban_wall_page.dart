@@ -277,7 +277,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
 
   @override
   Widget build(BuildContext context) {
-    final boxesOnTargetCount = _boxesOnTargetCount;
     final isLevelComplete = _isLevelComplete;
     final hasBlockingIssue =
         _levelValidationMessage != null || _deadlockMessage != null;
@@ -304,8 +303,8 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         foregroundColor: Colors.white,
         title: Text(
           isLevelComplete
-              ? '推箱子 - ${_currentLevel.displayName} 已过关'
-              : '推箱子 - ${_currentLevel.displayName}',
+              ? '推箱子 - ${_currentLevel.title} 已过关'
+              : '推箱子 - ${_currentLevel.title}',
         ),
         actions: [
           IconButton(
@@ -359,26 +358,44 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
+                          const boardHeaderHeight = 48.0;
                           final boardRatio =
                               _currentLayout.first.length /
                               _currentLayout.length;
                           final boardWidth = math.min(
                             constraints.maxWidth,
-                            constraints.maxHeight * boardRatio,
+                            math.max(
+                                  0,
+                                  constraints.maxHeight - boardHeaderHeight,
+                                ) *
+                                boardRatio,
                           );
 
                           return Center(
-                            child: SizedBox(
-                              width: boardWidth,
-                              child: AspectRatio(
-                                aspectRatio: boardRatio,
-                                child: SokobanBoard(
-                                  layout: _currentLayout,
-                                  brickPositions: _brickPositions,
-                                  targetPositions: _targetPositions,
-                                  playerPosition: _playerPosition,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: boardWidth,
+                                  child: _BoardHeader(
+                                    levelNumber: _currentLevel.number,
+                                    stepCount: _stepCount,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: boardWidth,
+                                  child: AspectRatio(
+                                    aspectRatio: boardRatio,
+                                    child: SokobanBoard(
+                                      layout: _currentLayout,
+                                      brickPositions: _brickPositions,
+                                      targetPositions: _targetPositions,
+                                      playerPosition: _playerPosition,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -389,13 +406,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       canUndo: _canUndo,
                       onReset: _resetCurrentLevel,
                       onUndo: _undoMove,
-                    ),
-                    const SizedBox(height: 12),
-                    _StatsRow(
-                      currentLevelIndex: _currentLevelIndex,
-                      stepCount: _stepCount,
-                      boxesOnTargetCount: boxesOnTargetCount,
-                      targetCount: _targetPositions.length,
                     ),
                     const SizedBox(height: 12),
                     AnimatedContainer(
@@ -452,6 +462,36 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   }
 }
 
+class _BoardHeader extends StatelessWidget {
+  const _BoardHeader({required this.levelNumber, required this.stepCount});
+
+  final int levelNumber;
+  final int stepCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD9CFBB)),
+      ),
+      child: Row(
+        children: [
+          Text('第 $levelNumber 关', style: textStyle),
+          const Spacer(),
+          Text('步数 $stepCount', style: textStyle),
+        ],
+      ),
+    );
+  }
+}
+
 class _GameControls extends StatelessWidget {
   const _GameControls({
     required this.canUndo,
@@ -485,82 +525,6 @@ class _GameControls extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({
-    required this.currentLevelIndex,
-    required this.stepCount,
-    required this.boxesOnTargetCount,
-    required this.targetCount,
-  });
-
-  final int currentLevelIndex;
-  final int stepCount;
-  final int boxesOnTargetCount;
-  final int targetCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            label: '关卡',
-            value: '${currentLevelIndex + 1}/${sokobanLevels.length}',
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(label: '步数', value: '$stepCount'),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            label: '进度',
-            value: '$boxesOnTargetCount/$targetCount',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFD9CFBB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: const Color(0xFF756B58)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
     );
   }
 }
