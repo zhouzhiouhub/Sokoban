@@ -72,14 +72,10 @@ class SokobanTile extends StatelessWidget {
               child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14),
             ),
           if (tile == BoardTile.brick)
-            Padding(
-              padding: const EdgeInsets.all(5),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC98A55),
-                  border: Border.all(color: const Color(0xFF74441E), width: 1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFC98A55),
+                border: Border.all(color: const Color(0xFF74441E), width: 1),
               ),
             ),
           if (hasPlayer) const Center(child: _PlayerAvatar()),
