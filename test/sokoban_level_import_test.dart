@@ -76,7 +76,7 @@ void main() {
     test('rejects mismatched box and target counts', () {
       expect(
         () => parseImportedSokobanLevelJson(
-          _validLevelJson.replaceFirst('"# T #"', '"#   #"'),
+          _validLevelJson.replaceFirst('"#   #"', '"# T #"'),
         ),
         throwsA(
           isA<SokobanLevelImportException>().having(

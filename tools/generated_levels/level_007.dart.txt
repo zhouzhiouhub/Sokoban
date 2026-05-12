@@ -1,0 +1,18 @@
+  SokobanLevel(
+    number: 7,
+    title: '自定义关卡',
+    description: '把箱子推到目标点。',
+    layout: [
+      '               ',
+      '   ########    ',
+      '   #  #   #    ',
+      '   # BTTB #    ',
+      '   # BT* ##    ',
+      '   # BTTB #    ',
+      '   #  #   #    ',
+      '   ########    ',
+      '               ',
+      '               ',
+    ],
+    initialPlayerPosition: BoardPosition(row: 4, column: 4),
+  ),
