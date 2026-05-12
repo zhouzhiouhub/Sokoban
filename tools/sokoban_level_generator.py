@@ -1,4 +1,5 @@
 import json
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -12,6 +13,8 @@ MAX_COLUMNS = 40
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPORT_DIR = PROJECT_ROOT / "tools" / "generated_levels"
+LEVEL_NUMBER_PATTERN = re.compile(r"\bnumber\s*:\s*(\d+)\b")
+LEVEL_FILENAME_PATTERN = re.compile(r"level[_-]?(\d+)", re.IGNORECASE)
 
 SYMBOLS = {
     "outside": "_",
@@ -59,6 +62,64 @@ TEXT_COLORS = {
 }
 
 
+def next_export_level_number(export_dir=DEFAULT_EXPORT_DIR):
+    return min(max(_exported_level_numbers(export_dir), default=0) + 1, 999)
+
+
+def _exported_level_numbers(export_dir):
+    if not export_dir.exists():
+        return []
+
+    numbers = []
+    for path in export_dir.iterdir():
+        if not path.is_file():
+            continue
+
+        number = _level_number_from_file(path)
+        if number is not None:
+            numbers.append(number)
+
+    return numbers
+
+
+def _level_number_from_file(path):
+    if path.suffix.lower() == ".json":
+        number = _level_number_from_json(path)
+        if number is not None:
+            return number
+
+    number = _level_number_from_text(path)
+    if number is not None:
+        return number
+
+    match = LEVEL_FILENAME_PATTERN.search(path.stem)
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
+def _level_number_from_json(path):
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    number = payload.get("number") if isinstance(payload, dict) else None
+    return number if isinstance(number, int) and number >= 1 else None
+
+
+def _level_number_from_text(path):
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+
+    match = LEVEL_NUMBER_PATTERN.search(text)
+    return int(match.group(1)) if match else None
+
+
 class SokobanLevelGenerator(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -69,11 +130,17 @@ class SokobanLevelGenerator(tk.Tk):
 
         self.rows_var = tk.IntVar(value=DEFAULT_ROWS)
         self.columns_var = tk.IntVar(value=DEFAULT_COLUMNS)
-        self.level_number_var = tk.IntVar(value=41)
+        DEFAULT_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        self._auto_level_number = next_export_level_number()
+        self._level_number_is_custom = False
+        self._updating_level_number = False
+        self.level_number_var = tk.IntVar(value=self._auto_level_number)
         self.level_title_var = tk.StringVar(value="自定义关卡")
         self.description_var = tk.StringVar(value="把箱子推到目标点。")
         self.tool_var = tk.StringVar(value="wall")
-        self.status_var = tk.StringVar(value="选择工具后点击格子开始设计。")
+        self.status_var = tk.StringVar(
+            value=f"选择工具后点击格子开始设计。默认导出目录：{DEFAULT_EXPORT_DIR}"
+        )
 
         self.grid_data = []
         self.player_position = None
@@ -83,6 +150,7 @@ class SokobanLevelGenerator(tk.Tk):
         self._build_ui()
         self._create_grid(DEFAULT_ROWS, DEFAULT_COLUMNS)
         self._bind_shortcuts()
+        self.level_number_var.trace_add("write", self._mark_level_number_custom)
 
     def _build_ui(self):
         root = ttk.Frame(self, padding=12)
@@ -240,6 +308,26 @@ class SokobanLevelGenerator(tk.Tk):
         for tool, key in TOOL_KEYS.items():
             self.bind(key, lambda _event, selected=tool: self.tool_var.set(selected))
         self.bind("<Control-s>", lambda _event: self._export_dart())
+
+    def _mark_level_number_custom(self, *_args):
+        if self._updating_level_number:
+            return
+
+        self._level_number_is_custom = True
+
+    def _refresh_auto_level_number(self):
+        if self._level_number_is_custom:
+            return
+
+        self._set_auto_level_number(next_export_level_number())
+
+    def _set_auto_level_number(self, number):
+        self._auto_level_number = number
+        self._updating_level_number = True
+        try:
+            self.level_number_var.set(number)
+        finally:
+            self._updating_level_number = False
 
     def _create_grid(self, rows, columns):
         self.grid_data = [[SYMBOLS["floor"] for _ in range(columns)] for _ in range(rows)]
@@ -455,6 +543,8 @@ class SokobanLevelGenerator(tk.Tk):
         return ["".join(row) for row in self.grid_data]
 
     def _level_payload(self):
+        self._refresh_auto_level_number()
+
         if self.player_position is None:
             raise ValueError("请先放置玩家。")
 
@@ -532,6 +622,7 @@ class SokobanLevelGenerator(tk.Tk):
             file.write("\n")
 
         self.status_var.set(f"已导出 JSON：{path}")
+        self._refresh_auto_level_number()
         messagebox.showinfo("导出完成", f"已导出 JSON：\n{path}")
 
     def _export_dart(self):
@@ -560,6 +651,7 @@ class SokobanLevelGenerator(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(snippet)
         self.status_var.set(f"已导出 Dart 片段并复制到剪贴板：{path}")
+        self._refresh_auto_level_number()
         messagebox.showinfo(
             "导出完成",
             f"已导出 Dart 片段，并复制到剪贴板：\n{path}",
