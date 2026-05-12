@@ -9,7 +9,7 @@ import 'package:app/src/ui/sokoban_board.dart';
 
 void main() {
   test('has designed levels with valid basic structure', () {
-    expect(sokobanLevels.length, 2);
+    expect(sokobanLevels.length, 3);
 
     for (final level in sokobanLevels) {
       final expectedColumnCount = level.layout.first.length;
