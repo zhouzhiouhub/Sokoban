@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../game/sokoban_rules.dart';
 import '../input/game_intents.dart';
-import '../levels/sokoban_levels.dart';
+import '../levels/level_catalog.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
 import '../models/game_snapshot.dart';
@@ -14,9 +14,14 @@ import 'movement_controls.dart';
 import 'sokoban_board.dart';
 
 class SokobanWallPage extends StatefulWidget {
-  const SokobanWallPage({super.key, this.initialLevelIndex = 0});
+  const SokobanWallPage({
+    super.key,
+    this.initialLevelIndex = 0,
+    this.levelCatalog,
+  }) : assert(levelCatalog == null || levelCatalog.length > 0);
 
   final int initialLevelIndex;
+  final List<LevelCatalogItem>? levelCatalog;
 
   @override
   State<SokobanWallPage> createState() => _SokobanWallPageState();
@@ -27,6 +32,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   static const double _boardHeaderGap = 8;
 
   int _currentLevelIndex = 0;
+  late final List<LevelCatalogItem> _levelCatalog;
   late BoardPosition _playerPosition;
   late Set<BoardPosition> _brickPositions;
   late Set<BoardPosition> _targetPositions;
@@ -36,7 +42,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   String? _levelValidationMessage;
   String? _deadlockMessage;
 
-  SokobanLevel get _currentLevel => sokobanLevels[_currentLevelIndex];
+  SokobanLevel get _currentLevel => _levelCatalog[_currentLevelIndex].level;
 
   List<String> get _currentLayout => _currentLevel.layout;
 
@@ -49,6 +55,9 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   @override
   void initState() {
     super.initState();
+    _levelCatalog = List<LevelCatalogItem>.unmodifiable(
+      widget.levelCatalog ?? builtInLevelCatalog,
+    );
     _loadLevel(_normalisedLevelIndex(widget.initialLevelIndex));
   }
 
@@ -57,8 +66,8 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       return 0;
     }
 
-    if (levelIndex >= sokobanLevels.length) {
-      return sokobanLevels.length - 1;
+    if (levelIndex >= _levelCatalog.length) {
+      return _levelCatalog.length - 1;
     }
 
     return levelIndex;
@@ -142,7 +151,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   }
 
   void _loadLevel(int levelIndex) {
-    final level = sokobanLevels[levelIndex];
+    final level = _levelCatalog[levelIndex].level;
     _currentLevelIndex = levelIndex;
     _playerPosition = level.initialPlayerPosition;
     _brickPositions = positionsForSymbol(level.layout, 'B');
@@ -164,7 +173,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
 
   void _changeLevel(int levelIndex) {
     if (levelIndex < 0 ||
-        levelIndex >= sokobanLevels.length ||
+        levelIndex >= _levelCatalog.length ||
         levelIndex == _currentLevelIndex) {
       return;
     }
@@ -407,16 +416,16 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     if (isLevelComplete) ...[
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: _currentLevelIndex < sokobanLevels.length - 1
+                        onPressed: _currentLevelIndex < _levelCatalog.length - 1
                             ? () => _changeLevel(_currentLevelIndex + 1)
                             : _resetCurrentLevel,
                         icon: Icon(
-                          _currentLevelIndex < sokobanLevels.length - 1
+                          _currentLevelIndex < _levelCatalog.length - 1
                               ? Icons.skip_next
                               : Icons.replay,
                         ),
                         label: Text(
-                          _currentLevelIndex < sokobanLevels.length - 1
+                          _currentLevelIndex < _levelCatalog.length - 1
                               ? '进入下一关'
                               : '重玩本关',
                         ),

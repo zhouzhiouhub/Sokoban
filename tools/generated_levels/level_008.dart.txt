@@ -1,0 +1,18 @@
+  SokobanLevel(
+    number: 8,
+    title: '第八关',
+    description: '把箱子推到目标点。',
+    layout: [
+      '     #####     ',
+      '   ###   #     ',
+      '   #T B  #     ',
+      '   ### BT#     ',
+      '   #T##B #     ',
+      '   # # T ##    ',
+      '   #B *BBT#    ',
+      '   #   T  #    ',
+      '   ########    ',
+      '               ',
+    ],
+    initialPlayerPosition: BoardPosition(row: 2, column: 5),
+  ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../levels/sokoban_levels.dart';
+import '../levels/level_catalog.dart';
 import 'sokoban_wall_page.dart';
 
 class LevelSelectionPage extends StatelessWidget {
@@ -8,6 +8,8 @@ class LevelSelectionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final levelCatalog = builtInLevelCatalog;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2EFE7),
       appBar: AppBar(
@@ -31,22 +33,25 @@ class LevelSelectionPage extends StatelessWidget {
                     horizontalPadding,
                     24,
                   ),
-                  itemCount: sokobanLevels.length,
+                  itemCount: levelCatalog.length,
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 104,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
                   ),
                   itemBuilder: (context, index) {
-                    final level = sokobanLevels[index];
+                    final catalogItem = levelCatalog[index];
+                    final level = catalogItem.level;
 
                     return _LevelTile(
                       number: level.number,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) =>
-                                SokobanWallPage(initialLevelIndex: index),
+                            builder: (_) => SokobanWallPage(
+                              initialLevelIndex: index,
+                              levelCatalog: levelCatalog,
+                            ),
                           ),
                         );
                       },
