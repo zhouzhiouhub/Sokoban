@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/src/game/sokoban_rules.dart';
 import 'package:app/src/levels/custom_level_store.dart';
+import 'package:app/src/levels/level_catalog.dart';
+import 'package:app/src/levels/sokoban_level_import.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
@@ -77,9 +79,7 @@ void main() {
   });
 
   testWidgets('renders the level selection page', (tester) async {
-    await tester.pumpWidget(
-      SokobanApp(customLevelStore: await _createTempStore()),
-    );
+    await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
     await tester.pump();
 
     expect(find.byType(LevelSelectionPage), findsOneWidget);
@@ -94,9 +94,7 @@ void main() {
   });
 
   testWidgets('opens a selected Sokoban level', (tester) async {
-    await tester.pumpWidget(
-      SokobanApp(customLevelStore: await _createTempStore()),
-    );
+    await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
     await tester.pump();
 
     await tester.tap(find.text('1'));
@@ -123,9 +121,7 @@ void main() {
   });
 
   testWidgets('imports pasted json and opens the custom level', (tester) async {
-    await tester.pumpWidget(
-      SokobanApp(customLevelStore: await _createTempStore()),
-    );
+    await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
     await tester.pump();
 
     await tester.tap(find.byTooltip('导入关卡'));
@@ -137,6 +133,8 @@ void main() {
 
     expect(find.byTooltip('自定义 1 - 导入测试'), findsOneWidget);
 
+    await tester.ensureVisible(find.byTooltip('自定义 1 - 导入测试'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('自定义 1 - 导入测试'));
     await tester.pumpAndSettle();
 
@@ -159,20 +157,27 @@ Finder _tilesWithPrefix(String prefix) {
   });
 }
 
-Future<CustomLevelStore> _createTempStore() async {
-  final tempDirectory = await Directory.systemTemp.createTemp(
-    'sokoban_widget_test_',
-  );
-  final storageFile = File(
-    '${tempDirectory.path}${Platform.pathSeparator}custom_levels.json',
-  );
-  addTearDown(() async {
-    if (await tempDirectory.exists()) {
-      await tempDirectory.delete(recursive: true);
-    }
-  });
+class _MemoryLevelStore extends CustomLevelStore {
+  _MemoryLevelStore() : super(storageFile: File('unused_custom_levels.json'));
 
-  return CustomLevelStore(storageFile: storageFile);
+  final List<LevelCatalogItem> _items = [];
+
+  @override
+  Future<List<LevelCatalogItem>> loadCatalogItems() async {
+    return List<LevelCatalogItem>.unmodifiable(_items);
+  }
+
+  @override
+  Future<LevelCatalogItem> importLevelJson(String source) async {
+    final level = parseImportedSokobanLevelJson(source);
+    final item = LevelCatalogItem(
+      id: 'custom_test_${_items.length + 1}',
+      source: LevelSource.custom,
+      level: level,
+    );
+    _items.add(item);
+    return item;
+  }
 }
 
 const String _importedLevelJson = '''

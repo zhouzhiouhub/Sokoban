@@ -141,44 +141,10 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
   }
 
   Future<String?> _requestImportInput(BuildContext context) async {
-    final controller = TextEditingController();
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('导入关卡'),
-            content: SizedBox(
-              width: 520,
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                minLines: 8,
-                maxLines: 12,
-                textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'JSON 内容或文件路径',
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.of(context).pop(controller.text),
-                icon: const Icon(Icons.file_upload_outlined),
-                label: const Text('导入'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
+    return showDialog<String>(
+      context: context,
+      builder: (context) => const _ImportLevelDialog(),
+    );
   }
 
   void _showSnackBar(String message) {
@@ -247,6 +213,55 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _ImportLevelDialog extends StatefulWidget {
+  const _ImportLevelDialog();
+
+  @override
+  State<_ImportLevelDialog> createState() => _ImportLevelDialogState();
+}
+
+class _ImportLevelDialogState extends State<_ImportLevelDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('导入关卡'),
+      content: SizedBox(
+        width: 520,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          minLines: 8,
+          maxLines: 12,
+          textInputAction: TextInputAction.newline,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'JSON 内容或文件路径',
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          icon: const Icon(Icons.file_upload_outlined),
+          label: const Text('导入'),
+        ),
+      ],
     );
   }
 }
