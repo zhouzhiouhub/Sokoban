@@ -1,7 +1,10 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/widgets.dart';
 
 import 'package:app/src/game/sokoban_rules.dart';
+import 'package:app/src/levels/custom_level_store.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
@@ -74,7 +77,10 @@ void main() {
   });
 
   testWidgets('renders the level selection page', (tester) async {
-    await tester.pumpWidget(const SokobanApp());
+    await tester.pumpWidget(
+      SokobanApp(customLevelStore: await _createTempStore()),
+    );
+    await tester.pump();
 
     expect(find.byType(LevelSelectionPage), findsOneWidget);
     expect(find.text('选择关卡'), findsOneWidget);
@@ -88,7 +94,10 @@ void main() {
   });
 
   testWidgets('opens a selected Sokoban level', (tester) async {
-    await tester.pumpWidget(const SokobanApp());
+    await tester.pumpWidget(
+      SokobanApp(customLevelStore: await _createTempStore()),
+    );
+    await tester.pump();
 
     await tester.tap(find.text('1'));
     await tester.pumpAndSettle();
@@ -112,6 +121,28 @@ void main() {
     expect(_tilesWithPrefix('brick-'), findsNWidgets(brickCount));
     expect(_tilesWithPrefix('floor-'), findsNWidgets(floorCount));
   });
+
+  testWidgets('imports pasted json and opens the custom level', (tester) async {
+    await tester.pumpWidget(
+      SokobanApp(customLevelStore: await _createTempStore()),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('导入关卡'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(EditableText), _importedLevelJson);
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('自定义 1 - 导入测试'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('自定义 1 - 导入测试'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('推箱子 - 导入测试'), findsOneWidget);
+    expect(find.byType(SokobanBoard), findsOneWidget);
+  });
 }
 
 int _cellCount(List<String> layout, String symbol) {
@@ -127,3 +158,39 @@ Finder _tilesWithPrefix(String prefix) {
     return key is ValueKey<String> && key.value.startsWith(prefix);
   });
 }
+
+Future<CustomLevelStore> _createTempStore() async {
+  final tempDirectory = await Directory.systemTemp.createTemp(
+    'sokoban_widget_test_',
+  );
+  final storageFile = File(
+    '${tempDirectory.path}${Platform.pathSeparator}custom_levels.json',
+  );
+  addTearDown(() async {
+    if (await tempDirectory.exists()) {
+      await tempDirectory.delete(recursive: true);
+    }
+  });
+
+  return CustomLevelStore(storageFile: storageFile);
+}
+
+const String _importedLevelJson = '''
+{
+  "number": 91,
+  "title": "导入测试",
+  "description": "从测试导入。",
+  "layout": [
+    "#####",
+    "#   #",
+    "# B #",
+    "# T #",
+    "#   #",
+    "#####"
+  ],
+  "initialPlayerPosition": {
+    "row": 1,
+    "column": 1
+  }
+}
+''';
