@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/src/models/board_viewport_size.dart';
 import 'package:app/src/levels/sokoban_level_import.dart';
 
 void main() {
@@ -140,6 +141,31 @@ void main() {
       );
     });
 
+    test('accepts the default maximum board size', () {
+      final level = parseImportedSokobanLevelJson(_maxSizedLevelJson);
+
+      expect(level.layout, hasLength(BoardViewportSize.maxRows));
+      expect(level.layout.first, hasLength(BoardViewportSize.maxColumns));
+    });
+
+    test('rejects layouts wider than the default board maximum', () {
+      expect(
+        () => parseImportedSokobanLevelJson(
+          _maxSizedLevelJson.replaceFirst(
+            '"####################"',
+            '"#####################"',
+          ),
+        ),
+        throwsA(
+          isA<SokobanLevelImportException>().having(
+            (error) => error.message,
+            'message',
+            contains('最多支持 ${BoardViewportSize.maxColumns} 列'),
+          ),
+        ),
+      );
+    });
+
     test('treats star cells as both box and target cells', () {
       final level = parseImportedSokobanLevelJson(_levelWithBoxOnTargetJson);
 
@@ -184,6 +210,40 @@ const String _levelWithBoxOnTargetJson = '''
   "initialPlayerPosition": {
     "row": 2,
     "column": 2
+  }
+}
+''';
+
+const String _maxSizedLevelJson = '''
+{
+  "number": 43,
+  "title": "最大尺寸关卡",
+  "description": "用于验证棋盘显示上限。",
+  "layout": [
+    "####################",
+    "#                  #",
+    "# *                #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "#                  #",
+    "####################"
+  ],
+  "initialPlayerPosition": {
+    "row": 1,
+    "column": 1
   }
 }
 ''';

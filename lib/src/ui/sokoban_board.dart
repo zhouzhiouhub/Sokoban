@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../game/sokoban_rules.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
+import '../models/board_viewport_size.dart';
 import 'sokoban_tile.dart';
 
 class SokobanBoard extends StatelessWidget {
@@ -14,8 +17,14 @@ class SokobanBoard extends StatelessWidget {
     required this.playerPosition,
   });
 
-  static const int fixedRowCount = 10;
-  static const int fixedColumnCount = 15;
+  static const int minRowCount = BoardViewportSize.minRows;
+  static const int minColumnCount = BoardViewportSize.minColumns;
+  static const int maxRowCount = BoardViewportSize.maxRows;
+  static const int maxColumnCount = BoardViewportSize.maxColumns;
+
+  static BoardViewportSize viewportSizeForLayout(List<String> layout) {
+    return BoardViewportSize.forLayout(layout);
+  }
 
   final List<String> layout;
   final Set<BoardPosition> brickPositions;
@@ -24,8 +33,14 @@ class SokobanBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rowOffset = ((fixedRowCount - layout.length) / 2).floor();
-    final columnOffset = ((fixedColumnCount - layout.first.length) / 2).floor();
+    final viewportSize = viewportSizeForLayout(layout);
+    final rowOffset = ((viewportSize.rows - layout.length) / 2).floor();
+    final layoutColumnCount = layout.fold<int>(
+      0,
+      (currentMax, row) => math.max(currentMax, row.length),
+    );
+    final columnOffset = ((viewportSize.columns - layoutColumnCount) / 2)
+        .floor();
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -34,13 +49,17 @@ class SokobanBoard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var viewportRow = 0; viewportRow < fixedRowCount; viewportRow++)
+          for (
+            var viewportRow = 0;
+            viewportRow < viewportSize.rows;
+            viewportRow++
+          )
             Expanded(
               child: Row(
                 children: [
                   for (
                     var viewportColumn = 0;
-                    viewportColumn < fixedColumnCount;
+                    viewportColumn < viewportSize.columns;
                     viewportColumn++
                   )
                     Expanded(
@@ -58,8 +77,8 @@ class SokobanBoard extends StatelessWidget {
                             final isViewportBoundary =
                                 viewportRow == 0 ||
                                 viewportColumn == 0 ||
-                                viewportRow == fixedRowCount - 1 ||
-                                viewportColumn == fixedColumnCount - 1;
+                                viewportRow == viewportSize.rows - 1 ||
+                                viewportColumn == viewportSize.columns - 1;
 
                             return isViewportBoundary
                                 ? const _ViewportWallCell()
@@ -123,8 +142,8 @@ class _ViewportWallCell extends StatelessWidget {
       label: '墙体',
       child: Stack(
         fit: StackFit.expand,
-        children: const [
-          DecoratedBox(
+        children: [
+          const DecoratedBox(
             decoration: BoxDecoration(
               color: Color(0xFF3F493A),
               border: Border.fromBorderSide(
@@ -132,7 +151,20 @@ class _ViewportWallCell extends StatelessWidget {
               ),
             ),
           ),
-          Center(child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14)),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final iconSize =
+                  math.min(constraints.maxWidth, constraints.maxHeight) * 0.55;
+
+              return Center(
+                child: Icon(
+                  Icons.square,
+                  color: const Color(0xFF5F7257),
+                  size: math.min(14.0, iconSize),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

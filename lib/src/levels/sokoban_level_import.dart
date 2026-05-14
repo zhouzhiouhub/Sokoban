@@ -2,14 +2,15 @@ import 'dart:convert';
 
 import '../game/sokoban_rules.dart';
 import '../models/board_position.dart';
+import '../models/board_viewport_size.dart';
 import '../models/sokoban_level.dart';
 
 const Set<String> _allowedLayoutSymbols = {'_', ' ', '#', 'B', 'T', '*'};
 
 class SokobanLevelValidationOptions {
   const SokobanLevelValidationOptions({
-    this.maxRows = 10,
-    this.maxColumns = 15,
+    this.maxRows = BoardViewportSize.maxRows,
+    this.maxColumns = BoardViewportSize.maxColumns,
     this.requireSolvable = false,
     this.maxBoxesForSolvability = 8,
   });

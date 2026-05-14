@@ -11,6 +11,7 @@ import 'package:app/src/levels/sokoban_levels.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
 import 'package:app/src/ui/sokoban_board.dart';
+import 'package:app/src/ui/sokoban_wall_page.dart';
 
 void main() {
   test('has designed levels with valid basic structure', () {
@@ -42,6 +43,18 @@ void main() {
         isFalse,
         reason: '${level.displayName} player must not start on a box.',
       );
+
+      final viewportSize = SokobanBoard.viewportSizeForLayout(level.layout);
+      expect(
+        viewportSize.rows,
+        greaterThanOrEqualTo(level.layout.length),
+        reason: '${level.displayName} must fit vertically in the board.',
+      );
+      expect(
+        viewportSize.columns,
+        greaterThanOrEqualTo(expectedColumnCount),
+        reason: '${level.displayName} must fit horizontally in the board.',
+      );
     }
   });
 
@@ -57,6 +70,20 @@ void main() {
         reason: '${level.displayName} must not duplicate another layout.',
       );
     }
+  });
+
+  test('board viewport size is bounded for small and maximum layouts', () {
+    final smallViewport = SokobanBoard.viewportSizeForLayout(
+      List<String>.filled(5, '#####'),
+    );
+    final maximumViewport = SokobanBoard.viewportSizeForLayout(
+      List<String>.filled(20, '####################'),
+    );
+
+    expect(smallViewport.rows, 10);
+    expect(smallViewport.columns, 10);
+    expect(maximumViewport.rows, 20);
+    expect(maximumViewport.columns, 20);
   });
 
   test('designed levels are solvable', () {
@@ -118,6 +145,20 @@ void main() {
     expect(_tilesWithPrefix('floor-'), findsNWidgets(floorCount));
   });
 
+  testWidgets('renders every cell for a wide designed level', (tester) async {
+    final levelIndex = sokobanLevels.indexWhere((level) => level.number == 19);
+    final level = sokobanLevels[levelIndex];
+
+    await tester.pumpWidget(
+      MaterialApp(home: SokobanWallPage(initialLevelIndex: levelIndex)),
+    );
+
+    final viewportSize = SokobanBoard.viewportSizeForLayout(level.layout);
+    expect(viewportSize.rows, level.layout.length);
+    expect(viewportSize.columns, level.layout.first.length);
+    expect(_sokobanTileKeys(), findsNWidgets(_layoutCellCount(level.layout)));
+  });
+
   testWidgets('imports pasted json and opens the custom level', (tester) async {
     await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
     await tester.pump();
@@ -152,6 +193,17 @@ Finder _tilesWithPrefix(String prefix) {
     final key = widget.key;
     return key is ValueKey<String> && key.value.startsWith(prefix);
   });
+}
+
+Finder _sokobanTileKeys() {
+  return find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> && key.value.split('-').length == 4;
+  });
+}
+
+int _layoutCellCount(List<String> layout) {
+  return layout.fold<int>(0, (count, row) => count + row.length);
 }
 
 class _MemoryLevelStore extends CustomLevelStore {

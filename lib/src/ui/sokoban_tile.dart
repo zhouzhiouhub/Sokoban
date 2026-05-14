@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/board_tile.dart';
@@ -55,21 +57,13 @@ class SokobanTile extends StatelessWidget {
               border: Border.all(color: borderColor, width: 0.7),
             ),
           ),
-          if (isTarget && tile != BoardTile.wall)
-            Center(
-              child: Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF4C4),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFB18B2C), width: 2),
-                ),
-              ),
-            ),
+          if (isTarget && tile != BoardTile.wall) const _TargetMarker(),
           if (tile == BoardTile.wall)
-            const Center(
-              child: Icon(Icons.square, color: Color(0xFF5F7257), size: 14),
+            const _ScaledTileIcon(
+              icon: Icons.square,
+              color: Color(0xFF5F7257),
+              maxSize: 14,
+              sizeFactor: 0.55,
             ),
           if (tile == BoardTile.brick)
             DecoratedBox(
@@ -85,27 +79,100 @@ class SokobanTile extends StatelessWidget {
   }
 }
 
+class _TargetMarker extends StatelessWidget {
+  const _TargetMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortestSide = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final markerSize = math.min(16.0, shortestSide * 0.46);
+
+        return Center(
+          child: Container(
+            width: markerSize,
+            height: markerSize,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4C4),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFB18B2C), width: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScaledTileIcon extends StatelessWidget {
+  const _ScaledTileIcon({
+    required this.icon,
+    required this.color,
+    required this.maxSize,
+    required this.sizeFactor,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double maxSize;
+  final double sizeFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortestSide = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final iconSize = math.min(maxSize, shortestSide * sizeFactor);
+
+        return Center(
+          child: Icon(icon, color: color, size: iconSize),
+        );
+      },
+    );
+  }
+}
+
 class _PlayerAvatar extends StatelessWidget {
   const _PlayerAvatar();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        color: const Color(0xFF3C6E71),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortestSide = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final avatarSize = math.min(22.0, shortestSide * 0.76);
+        final iconSize = math.min(14.0, avatarSize * 0.64);
+
+        return Center(
+          child: Container(
+            width: avatarSize,
+            height: avatarSize,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3C6E71),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(Icons.person, size: iconSize, color: Colors.white),
           ),
-        ],
-      ),
-      child: const Icon(Icons.person, size: 14, color: Colors.white),
+        );
+      },
     );
   }
 }

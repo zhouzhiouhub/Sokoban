@@ -8,6 +8,7 @@ import '../input/game_intents.dart';
 import '../levels/level_catalog.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
+import '../models/board_viewport_size.dart';
 import '../models/game_snapshot.dart';
 import '../models/sokoban_level.dart';
 import 'movement_controls.dart';
@@ -49,7 +50,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   bool get _canUndo => _moveHistory.isNotEmpty;
 
   double get _boardAspectRatio {
-    return SokobanBoard.fixedColumnCount / SokobanBoard.fixedRowCount;
+    return SokobanBoard.viewportSizeForLayout(_currentLayout).aspectRatio;
   }
 
   @override
@@ -94,6 +95,12 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     final expectedColumnCount = _currentLayout.first.length;
     if (_currentLayout.any((row) => row.length != expectedColumnCount)) {
       return '关卡布局必须是规则矩形，每一行长度都要一致。';
+    }
+
+    if (!BoardViewportSize.supportsLayout(_currentLayout)) {
+      return '当前关卡尺寸为 ${_currentLayout.length} x $expectedColumnCount，'
+          '当前最多支持 ${BoardViewportSize.maxRows} x '
+          '${BoardViewportSize.maxColumns}。';
     }
 
     if (_brickPositions.isEmpty || _targetPositions.isEmpty) {
@@ -283,6 +290,10 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         : hasBlockingIssue
         ? const Color(0xFFB05D51)
         : const Color(0xFFC2B79D);
+    final screenSize = MediaQuery.sizeOf(context);
+    final isCompactScreen = screenSize.shortestSide < 420;
+    final pagePadding = isCompactScreen ? 10.0 : 16.0;
+    final sectionGap = isCompactScreen ? 10.0 : 12.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2EFE7),
@@ -340,7 +351,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
             child: Focus(
               autofocus: true,
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(pagePadding),
                 child: Column(
                   children: [
                     Expanded(
@@ -388,19 +399,19 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: isCompactScreen ? 12 : 16),
                     _GameControls(
                       canUndo: _canUndo,
                       onReset: _resetCurrentLevel,
                       onUndo: _undoMove,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: sectionGap),
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 12,
+                        vertical: isCompactScreen ? 10 : 12,
                       ),
                       decoration: BoxDecoration(
                         color: statusColor,
@@ -414,7 +425,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       ),
                     ),
                     if (isLevelComplete) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: sectionGap),
                       FilledButton.icon(
                         onPressed: _currentLevelIndex < _levelCatalog.length - 1
                             ? () => _changeLevel(_currentLevelIndex + 1)
@@ -431,7 +442,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 12),
+                    SizedBox(height: sectionGap),
                     MovementControls(
                       onUp: () => _movePlayer(-1, 0),
                       onDown: () => _movePlayer(1, 0),
