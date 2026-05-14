@@ -5,11 +5,6 @@ class BoardViewportSize {
     : assert(rows > 0),
       assert(columns > 0);
 
-  static const int minRows = 10;
-  static const int minColumns = 10;
-  static const int maxRows = 20;
-  static const int maxColumns = 20;
-
   final int rows;
   final int columns;
 
@@ -23,8 +18,8 @@ class BoardViewportSize {
     );
 
     return BoardViewportSize(
-      rows: _boundedDimension(layoutRows, minRows, maxRows),
-      columns: _boundedDimension(layoutColumns, minColumns, maxColumns),
+      rows: math.max(1, layoutRows),
+      columns: math.max(1, layoutColumns),
     );
   }
 
@@ -35,10 +30,6 @@ class BoardViewportSize {
       (currentMax, row) => math.max(currentMax, row.length),
     );
 
-    return layoutRows <= maxRows && layoutColumns <= maxColumns;
+    return layoutRows > 0 && layoutColumns > 0;
   }
-}
-
-int _boundedDimension(int value, int minValue, int maxValue) {
-  return math.min(maxValue, math.max(minValue, value));
 }

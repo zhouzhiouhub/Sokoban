@@ -2,21 +2,20 @@ import 'dart:convert';
 
 import '../game/sokoban_rules.dart';
 import '../models/board_position.dart';
-import '../models/board_viewport_size.dart';
 import '../models/sokoban_level.dart';
 
 const Set<String> _allowedLayoutSymbols = {'_', ' ', '#', 'B', 'T', '*'};
 
 class SokobanLevelValidationOptions {
   const SokobanLevelValidationOptions({
-    this.maxRows = BoardViewportSize.maxRows,
-    this.maxColumns = BoardViewportSize.maxColumns,
+    this.maxRows,
+    this.maxColumns,
     this.requireSolvable = false,
     this.maxBoxesForSolvability = 8,
   });
 
-  final int maxRows;
-  final int maxColumns;
+  final int? maxRows;
+  final int? maxColumns;
   final bool requireSolvable;
   final int maxBoxesForSolvability;
 }
@@ -74,8 +73,9 @@ List<String> validateImportedSokobanLevel(
     return errors;
   }
 
-  if (layout.length > options.maxRows) {
-    errors.add('当前关卡行数为 ${layout.length}，最多支持 ${options.maxRows} 行。');
+  final maxRows = options.maxRows;
+  if (maxRows != null && layout.length > maxRows) {
+    errors.add('当前关卡行数为 ${layout.length}，最多支持 $maxRows 行。');
   }
 
   final expectedColumnCount = layout.first.length;
@@ -83,8 +83,9 @@ List<String> validateImportedSokobanLevel(
     errors.add('layout 的行不能为空字符串。');
   }
 
-  if (expectedColumnCount > options.maxColumns) {
-    errors.add('当前关卡列数为 $expectedColumnCount，最多支持 ${options.maxColumns} 列。');
+  final maxColumns = options.maxColumns;
+  if (maxColumns != null && expectedColumnCount > maxColumns) {
+    errors.add('当前关卡列数为 $expectedColumnCount，最多支持 $maxColumns 列。');
   }
 
   for (var row = 0; row < layout.length; row++) {

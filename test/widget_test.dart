@@ -72,18 +72,18 @@ void main() {
     }
   });
 
-  test('board viewport size is bounded for small and maximum layouts', () {
+  test('board viewport size follows the layout dimensions', () {
     final smallViewport = SokobanBoard.viewportSizeForLayout(
       List<String>.filled(5, '#####'),
     );
-    final maximumViewport = SokobanBoard.viewportSizeForLayout(
-      List<String>.filled(20, '####################'),
+    final wideViewport = SokobanBoard.viewportSizeForLayout(
+      List<String>.filled(3, '#######################'),
     );
 
-    expect(smallViewport.rows, 10);
-    expect(smallViewport.columns, 10);
-    expect(maximumViewport.rows, 20);
-    expect(maximumViewport.columns, 20);
+    expect(smallViewport.rows, 5);
+    expect(smallViewport.columns, 5);
+    expect(wideViewport.rows, 3);
+    expect(wideViewport.columns, 23);
   });
 
   test('designed levels are solvable', () {

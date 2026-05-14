@@ -17,11 +17,6 @@ class SokobanBoard extends StatelessWidget {
     required this.playerPosition,
   });
 
-  static const int minRowCount = BoardViewportSize.minRows;
-  static const int minColumnCount = BoardViewportSize.minColumns;
-  static const int maxRowCount = BoardViewportSize.maxRows;
-  static const int maxColumnCount = BoardViewportSize.maxColumns;
-
   static BoardViewportSize viewportSizeForLayout(List<String> layout) {
     return BoardViewportSize.forLayout(layout);
   }

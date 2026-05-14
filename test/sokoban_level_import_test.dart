@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/src/models/board_viewport_size.dart';
 import 'package:app/src/levels/sokoban_level_import.dart';
 
 void main() {
@@ -141,26 +140,24 @@ void main() {
       );
     });
 
-    test('accepts the default maximum board size', () {
-      final level = parseImportedSokobanLevelJson(_maxSizedLevelJson);
+    test('accepts layouts larger than the old fixed board size by default', () {
+      final level = parseImportedSokobanLevelJson(_wideLevelJson);
 
-      expect(level.layout, hasLength(BoardViewportSize.maxRows));
-      expect(level.layout.first, hasLength(BoardViewportSize.maxColumns));
+      expect(level.layout, hasLength(6));
+      expect(level.layout.first, hasLength(21));
     });
 
-    test('rejects layouts wider than the default board maximum', () {
+    test('rejects layouts wider than an explicit column limit', () {
       expect(
         () => parseImportedSokobanLevelJson(
-          _maxSizedLevelJson.replaceFirst(
-            '"####################"',
-            '"#####################"',
-          ),
+          _wideLevelJson,
+          options: const SokobanLevelValidationOptions(maxColumns: 20),
         ),
         throwsA(
           isA<SokobanLevelImportException>().having(
             (error) => error.message,
             'message',
-            contains('最多支持 ${BoardViewportSize.maxColumns} 列'),
+            contains('最多支持 20 列'),
           ),
         ),
       );
@@ -214,32 +211,18 @@ const String _levelWithBoxOnTargetJson = '''
 }
 ''';
 
-const String _maxSizedLevelJson = '''
+const String _wideLevelJson = '''
 {
   "number": 43,
-  "title": "最大尺寸关卡",
-  "description": "用于验证棋盘显示上限。",
+  "title": "宽关卡",
+  "description": "用于验证棋盘不再使用固定显示上限。",
   "layout": [
-    "####################",
-    "#                  #",
-    "# *                #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "#                  #",
-    "####################"
+    "#####################",
+    "#                   #",
+    "# *                 #",
+    "#                   #",
+    "#                   #",
+    "#####################"
   ],
   "initialPlayerPosition": {
     "row": 1,

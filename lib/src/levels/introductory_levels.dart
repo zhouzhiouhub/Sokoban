@@ -42,24 +42,25 @@ final List<SokobanLevel> introductoryLevels = [
   ),
 
 
-  SokobanLevel(
+   SokobanLevel(
     number: 3,
-    title: levelCopy[2].title,
-    description: levelCopy[2].description,
+    title: '自定义关卡',
+    description: '把箱子推到目标点。',
     layout: [
-      '_______________',
-      '____### ###____',
-      '____#T #  #____',
-      '____#  B  #____',
-      '____#T    #____',
-      '____#   B #____',
-      '____#     #____',
-      '____#######____',
-      '_______________',
-      '_______________',
+      '               ',
+      '    #######    ',
+      '    #T #  #    ',
+      '    #  B  #    ',
+      '    #T    #    ',
+      '    #   B #    ',
+      '    #     #    ',
+      '    #######    ',
+      '               ',
+      '               ',
     ],
     initialPlayerPosition: BoardPosition(row: 4, column: 7),
   ),
+
   SokobanLevel(
     number: 4,
     title: levelCopy[3].title,

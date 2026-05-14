@@ -8,7 +8,6 @@ import '../input/game_intents.dart';
 import '../levels/level_catalog.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
-import '../models/board_viewport_size.dart';
 import '../models/game_snapshot.dart';
 import '../models/sokoban_level.dart';
 import 'movement_controls.dart';
@@ -31,6 +30,7 @@ class SokobanWallPage extends StatefulWidget {
 class _SokobanWallPageState extends State<SokobanWallPage> {
   static const double _boardHeaderHeight = 48;
   static const double _boardHeaderGap = 8;
+  static const double _boardHeaderMinWidth = 220;
 
   int _currentLevelIndex = 0;
   late final List<LevelCatalogItem> _levelCatalog;
@@ -92,15 +92,13 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   }
 
   String? _validateLoadedLevel() {
+    if (_currentLayout.isEmpty || _currentLayout.first.isEmpty) {
+      return '关卡布局不能为空。';
+    }
+
     final expectedColumnCount = _currentLayout.first.length;
     if (_currentLayout.any((row) => row.length != expectedColumnCount)) {
       return '关卡布局必须是规则矩形，每一行长度都要一致。';
-    }
-
-    if (!BoardViewportSize.supportsLayout(_currentLayout)) {
-      return '当前关卡尺寸为 ${_currentLayout.length} x $expectedColumnCount，'
-          '当前最多支持 ${BoardViewportSize.maxRows} x '
-          '${BoardViewportSize.maxColumns}。';
     }
 
     if (_brickPositions.isEmpty || _targetPositions.isEmpty) {
@@ -370,13 +368,17 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                           );
                           final double boardHeight =
                               boardWidth / boardAspectRatio;
+                          final double boardHeaderWidth = math.min(
+                            constraints.maxWidth,
+                            math.max(boardWidth, _boardHeaderMinWidth),
+                          );
 
                           return Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 SizedBox(
-                                  width: boardWidth,
+                                  width: boardHeaderWidth,
                                   child: _BoardHeader(
                                     levelNumber: _currentLevel.number,
                                     stepCount: _stepCount,
@@ -481,9 +483,24 @@ class _BoardHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text('第 $levelNumber 关', style: textStyle),
-          const Spacer(),
-          Text('步数 $stepCount', style: textStyle),
+          Flexible(
+            child: Text(
+              '第 $levelNumber 关',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              '步数 $stepCount',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: textStyle,
+            ),
+          ),
         ],
       ),
     );
