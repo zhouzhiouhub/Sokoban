@@ -31,6 +31,12 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   static const double _boardHeaderHeight = 48;
   static const double _boardHeaderGap = 8;
   static const double _boardHeaderMinWidth = 220;
+  static const int _hintSolverMaxVisitedStates = 8000;
+  static const List<String> _defaultStrategicHintTexts = [
+    '先观察目标区和箱子位置，优先处理最容易被墙角卡住的箱子。',
+    '每次推箱子前，先确认人物能走到箱子的反方向，给后续移动留出通道。',
+    '不要急着把箱子贴墙推进死角。继续点击提示，会给出当前局面的下一步推动作。',
+  ];
 
   int _currentLevelIndex = 0;
   late final List<LevelCatalogItem> _levelCatalog;
@@ -42,12 +48,25 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   int _stepCount = 0;
   String? _levelValidationMessage;
   String? _deadlockMessage;
+  int _unlockedHintCount = 0;
+  String? _hintMessage;
+  BoardPosition? _hintedBrickPosition;
+  BoardPosition? _hintDirection;
+  BoardPosition? _hintPushTargetPosition;
 
   SokobanLevel get _currentLevel => _levelCatalog[_currentLevelIndex].level;
 
   List<String> get _currentLayout => _currentLevel.layout;
 
   bool get _canUndo => _moveHistory.isNotEmpty;
+
+  List<String> get _currentStrategicHintTexts {
+    if (_currentLevel.hintTexts.isNotEmpty) {
+      return _currentLevel.hintTexts;
+    }
+
+    return _defaultStrategicHintTexts;
+  }
 
   double get _boardAspectRatio {
     return SokobanBoard.viewportSizeForLayout(_currentLayout).aspectRatio;
@@ -164,10 +183,19 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     _deadTiles = computeDeadTiles(level.layout, _targetPositions);
     _moveHistory.clear();
     _stepCount = 0;
+    _unlockedHintCount = 0;
+    _clearActiveHint();
     _levelValidationMessage = _validateLoadedLevel();
     _deadlockMessage = _levelValidationMessage == null
         ? _detectDeadlock(brickPositions: _brickPositions)
         : null;
+  }
+
+  void _clearActiveHint() {
+    _hintMessage = null;
+    _hintedBrickPosition = null;
+    _hintDirection = null;
+    _hintPushTargetPosition = null;
   }
 
   void _resetCurrentLevel() {
@@ -198,6 +226,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       _playerPosition = snapshot.playerPosition;
       _brickPositions = Set<BoardPosition>.from(snapshot.brickPositions);
       _stepCount = snapshot.stepCount;
+      _clearActiveHint();
       _deadlockMessage = _levelValidationMessage == null
           ? _detectDeadlock(brickPositions: _brickPositions)
           : null;
@@ -226,6 +255,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       );
 
       setState(() {
+        _clearActiveHint();
         _moveHistory.add(snapshot);
         _brickPositions = nextBrickPositions;
         _playerPosition = nextPosition;
@@ -240,10 +270,121 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     }
 
     setState(() {
+      _clearActiveHint();
       _moveHistory.add(snapshot);
       _playerPosition = nextPosition;
       _stepCount += 1;
     });
+  }
+
+  void _showHint() {
+    if (_levelValidationMessage != null) {
+      setState(() {
+        _clearActiveHint();
+        _hintMessage = _levelValidationMessage;
+      });
+      return;
+    }
+
+    if (_isLevelComplete) {
+      setState(() {
+        _clearActiveHint();
+        _hintMessage = '本关已经完成，可以进入下一关。';
+      });
+      return;
+    }
+
+    if (_deadlockMessage != null) {
+      setState(() {
+        _clearActiveHint();
+        _hintMessage = _deadlockMessage;
+      });
+      return;
+    }
+
+    final strategicHintTexts = _currentStrategicHintTexts;
+    if (_unlockedHintCount < strategicHintTexts.length) {
+      final hintNumber = _unlockedHintCount + 1;
+      final hintText = strategicHintTexts[_unlockedHintCount];
+      setState(() {
+        _clearActiveHint();
+        _unlockedHintCount = hintNumber;
+        _hintMessage = '提示 $hintNumber/${strategicHintTexts.length}：$hintText';
+      });
+      return;
+    }
+
+    final searchResult = findNextSokobanPushHint(
+      layout: _currentLayout,
+      playerPosition: _playerPosition,
+      brickPositions: _brickPositions,
+      targetPositions: _targetPositions,
+      deadTiles: _deadTiles,
+      maxVisitedStates: _hintSolverMaxVisitedStates,
+    );
+
+    setState(() {
+      _clearActiveHint();
+      switch (searchResult.status) {
+        case SokobanHintSearchStatus.alreadySolved:
+          _hintMessage = '本关已经完成，可以进入下一关。';
+          break;
+        case SokobanHintSearchStatus.found:
+          final hint = searchResult.hint!;
+          _hintMessage = _formatPushHint(hint);
+          _hintedBrickPosition = hint.brickPosition;
+          _hintDirection = hint.direction;
+          _hintPushTargetPosition = hint.nextBrickPosition;
+          break;
+        case SokobanHintSearchStatus.noSolution:
+          _hintMessage = '当前局面找不到可通关路径，建议撤销几步或重置本关。';
+          break;
+        case SokobanHintSearchStatus.searchLimitReached:
+          _hintMessage = '当前局面较复杂，暂时无法快速算出下一步。建议先撤销到更早状态，或重置后重新规划。';
+          break;
+      }
+    });
+  }
+
+  String _formatPushHint(SokobanPushHint hint) {
+    final pushSide = _pushSideText(hint.direction);
+    final direction = _directionText(hint.direction);
+    final playerPushPosition = _formatBoardPosition(hint.playerPushPosition);
+    final brickPosition = _formatBoardPosition(hint.brickPosition);
+
+    return '下一步：站到 $playerPushPosition，也就是箱子$pushSide，把 $brickPosition 的箱子向$direction推一格。';
+  }
+
+  String _formatBoardPosition(BoardPosition position) {
+    return '第 ${position.row + 1} 行第 ${position.column + 1} 列';
+  }
+
+  String _directionText(BoardPosition direction) {
+    if (direction.row < 0) {
+      return '上';
+    }
+    if (direction.row > 0) {
+      return '下';
+    }
+    if (direction.column < 0) {
+      return '左';
+    }
+
+    return '右';
+  }
+
+  String _pushSideText(BoardPosition direction) {
+    if (direction.row < 0) {
+      return '下方';
+    }
+    if (direction.row > 0) {
+      return '上方';
+    }
+    if (direction.column < 0) {
+      return '右侧';
+    }
+
+    return '左侧';
   }
 
   bool _isWalkableFloor(BoardPosition position) {
@@ -273,20 +414,26 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     final isLevelComplete = _isLevelComplete;
     final hasBlockingIssue =
         _levelValidationMessage != null || _deadlockMessage != null;
+    final hasActiveHint = _hintMessage != null;
     final statusMessage = isLevelComplete
         ? '全部箱子已到目标点，过关！'
         : _levelValidationMessage ??
               _deadlockMessage ??
+              _hintMessage ??
               _currentLevel.description;
     final statusColor = isLevelComplete
         ? const Color(0xFFDDEFD8)
         : hasBlockingIssue
         ? const Color(0xFFF6D7D1)
+        : hasActiveHint
+        ? const Color(0xFFFFF4C4)
         : const Color(0xFFE9E1CF);
     final statusBorderColor = isLevelComplete
         ? const Color(0xFF5B8A55)
         : hasBlockingIssue
         ? const Color(0xFFB05D51)
+        : hasActiveHint
+        ? const Color(0xFFD39C13)
         : const Color(0xFFC2B79D);
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactScreen = screenSize.shortestSide < 420;
@@ -393,6 +540,10 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                     brickPositions: _brickPositions,
                                     targetPositions: _targetPositions,
                                     playerPosition: _playerPosition,
+                                    hintedBrickPosition: _hintedBrickPosition,
+                                    hintDirection: _hintDirection,
+                                    hintPushTargetPosition:
+                                        _hintPushTargetPosition,
                                   ),
                                 ),
                               ],
@@ -406,6 +557,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       canUndo: _canUndo,
                       onReset: _resetCurrentLevel,
                       onUndo: _undoMove,
+                      onHint: _showHint,
                     ),
                     SizedBox(height: sectionGap),
                     AnimatedContainer(
@@ -512,11 +664,13 @@ class _GameControls extends StatelessWidget {
     required this.canUndo,
     required this.onReset,
     required this.onUndo,
+    required this.onHint,
   });
 
   final bool canUndo;
   final VoidCallback onReset;
   final VoidCallback onUndo;
+  final VoidCallback onHint;
 
   @override
   Widget build(BuildContext context) {
@@ -530,13 +684,26 @@ class _GameControls extends StatelessWidget {
             label: const Text('重置'),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: OutlinedButton.icon(
             onPressed: canUndo ? onUndo : null,
             style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
             icon: const Icon(Icons.undo),
-            label: const Text('撤销一步'),
+            label: const Text('撤销'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: onHint,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 48),
+              backgroundColor: const Color(0xFFD39C13),
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.lightbulb_outline),
+            label: const Text('提示'),
           ),
         ),
       ],

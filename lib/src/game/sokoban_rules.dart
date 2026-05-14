@@ -20,6 +20,57 @@ class SokobanSearchState {
   final Set<BoardPosition> brickPositions;
 }
 
+enum SokobanHintSearchStatus {
+  alreadySolved,
+  found,
+  noSolution,
+  searchLimitReached,
+}
+
+class SokobanPushHint {
+  const SokobanPushHint({required this.brickPosition, required this.direction});
+
+  final BoardPosition brickPosition;
+  final BoardPosition direction;
+
+  BoardPosition get playerPushPosition {
+    return brickPosition.move(-direction.row, -direction.column);
+  }
+
+  BoardPosition get nextBrickPosition {
+    return brickPosition.move(direction.row, direction.column);
+  }
+}
+
+class SokobanHintSearchResult {
+  const SokobanHintSearchResult._({required this.status, this.hint});
+
+  const SokobanHintSearchResult.alreadySolved()
+    : this._(status: SokobanHintSearchStatus.alreadySolved);
+
+  const SokobanHintSearchResult.found(SokobanPushHint hint)
+    : this._(status: SokobanHintSearchStatus.found, hint: hint);
+
+  const SokobanHintSearchResult.noSolution()
+    : this._(status: SokobanHintSearchStatus.noSolution);
+
+  const SokobanHintSearchResult.searchLimitReached()
+    : this._(status: SokobanHintSearchStatus.searchLimitReached);
+
+  final SokobanHintSearchStatus status;
+  final SokobanPushHint? hint;
+}
+
+class _SokobanHintSearchNode extends SokobanSearchState {
+  _SokobanHintSearchNode({
+    required super.playerPosition,
+    required super.brickPositions,
+    required this.firstPush,
+  });
+
+  final SokobanPushHint? firstPush;
+}
+
 BoardTile tileAt(List<String> layout, int row, int column) {
   return switch (layout[row][column]) {
     '_' => BoardTile.empty,
@@ -315,4 +366,114 @@ bool isSokobanStateSolvable({
   }
 
   return false;
+}
+
+SokobanHintSearchResult findNextSokobanPushHint({
+  required List<String> layout,
+  required BoardPosition playerPosition,
+  required Set<BoardPosition> brickPositions,
+  required Set<BoardPosition> targetPositions,
+  required Set<BoardPosition> deadTiles,
+  int maxVisitedStates = 20000,
+}) {
+  if (isSolvedState(brickPositions, targetPositions)) {
+    return const SokobanHintSearchResult.alreadySolved();
+  }
+
+  for (final brickPosition in brickPositions) {
+    if (!targetPositions.contains(brickPosition) &&
+        deadTiles.contains(brickPosition)) {
+      return const SokobanHintSearchResult.noSolution();
+    }
+  }
+
+  final visitedStates = <String>{};
+  final queue = ListQueue<_SokobanHintSearchNode>();
+  final initialState = _SokobanHintSearchNode(
+    playerPosition: playerPosition,
+    brickPositions: brickPositions,
+    firstPush: null,
+  );
+
+  visitedStates.add(searchStateKey(playerPosition, brickPositions));
+  queue.add(initialState);
+
+  var reachedSearchLimit = false;
+  while (queue.isNotEmpty) {
+    final state = queue.removeFirst();
+    final reachablePositions = computeReachableFloors(
+      layout,
+      state.playerPosition,
+      state.brickPositions,
+    );
+
+    for (final brickPosition in state.brickPositions) {
+      for (final direction in cardinalDirections) {
+        final playerPushPosition = brickPosition.move(
+          -direction.row,
+          -direction.column,
+        );
+        final nextBrickPosition = brickPosition.move(
+          direction.row,
+          direction.column,
+        );
+
+        if (!reachablePositions.contains(playerPushPosition) ||
+            !isFloorTile(layout, nextBrickPosition) ||
+            state.brickPositions.contains(nextBrickPosition) ||
+            (deadTiles.contains(nextBrickPosition) &&
+                !targetPositions.contains(nextBrickPosition))) {
+          continue;
+        }
+
+        final nextBrickPositions = Set<BoardPosition>.from(state.brickPositions)
+          ..remove(brickPosition)
+          ..add(nextBrickPosition);
+        if (formsFrozenSquareDeadlock(
+          layout,
+          nextBrickPositions,
+          targetPositions,
+          nextBrickPosition,
+        )) {
+          continue;
+        }
+
+        final pushHint = SokobanPushHint(
+          brickPosition: brickPosition,
+          direction: direction,
+        );
+        final firstPush = state.firstPush ?? pushHint;
+        if (isSolvedState(nextBrickPositions, targetPositions)) {
+          return SokobanHintSearchResult.found(firstPush);
+        }
+
+        final nextState = _SokobanHintSearchNode(
+          playerPosition: brickPosition,
+          brickPositions: nextBrickPositions,
+          firstPush: firstPush,
+        );
+        final nextStateKey = searchStateKey(
+          nextState.playerPosition,
+          nextState.brickPositions,
+        );
+        if (visitedStates.contains(nextStateKey)) {
+          continue;
+        }
+
+        if (visitedStates.length >= maxVisitedStates) {
+          reachedSearchLimit = true;
+          continue;
+        }
+
+        visitedStates.add(nextStateKey);
+        queue.add(nextState);
+      }
+    }
+  }
+
+  if (reachedSearchLimit) {
+    return const SokobanHintSearchResult.searchLimitReached();
+  }
+
+  return const SokobanHintSearchResult.noSolution();
 }

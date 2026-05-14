@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../models/board_position.dart';
 import '../models/board_tile.dart';
 
 class SokobanTile extends StatelessWidget {
@@ -10,11 +11,17 @@ class SokobanTile extends StatelessWidget {
     required this.tile,
     required this.isTarget,
     required this.hasPlayer,
+    this.isHintedBrick = false,
+    this.isHintPushTarget = false,
+    this.hintDirection,
   });
 
   final BoardTile tile;
   final bool isTarget;
   final bool hasPlayer;
+  final bool isHintedBrick;
+  final bool isHintPushTarget;
+  final BoardPosition? hintDirection;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +65,8 @@ class SokobanTile extends StatelessWidget {
             ),
           ),
           if (isTarget && tile != BoardTile.wall) const _TargetMarker(),
+          if (isHintPushTarget && tile != BoardTile.wall)
+            const _HintPushTargetMarker(),
           if (tile == BoardTile.wall)
             const _ScaledTileIcon(
               icon: Icons.square,
@@ -72,6 +81,9 @@ class SokobanTile extends StatelessWidget {
                 border: Border.all(color: const Color(0xFF74441E), width: 1),
               ),
             ),
+          if (isHintedBrick) const _HintedBrickOutline(),
+          if (isHintedBrick && hintDirection != null)
+            _HintDirectionArrow(direction: hintDirection!),
           if (hasPlayer) const Center(child: _PlayerAvatar()),
         ],
       ),
@@ -101,6 +113,93 @@ class _TargetMarker extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFFB18B2C), width: 2),
             ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HintPushTargetMarker extends StatelessWidget {
+  const _HintPushTargetMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortestSide = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final markerSize = math.min(20.0, shortestSide * 0.58);
+
+        return Center(
+          child: Container(
+            width: markerSize,
+            height: markerSize,
+            decoration: BoxDecoration(
+              color: const Color(0x66FFF2A6),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFE5A900), width: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HintedBrickOutline extends StatelessWidget {
+  const _HintedBrickOutline();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFFFD54F), width: 3),
+        boxShadow: const [
+          BoxShadow(color: Color(0x66FFB300), blurRadius: 8, spreadRadius: 1),
+        ],
+      ),
+    );
+  }
+}
+
+class _HintDirectionArrow extends StatelessWidget {
+  const _HintDirectionArrow({required this.direction});
+
+  final BoardPosition direction;
+
+  IconData get _icon {
+    if (direction.row < 0) {
+      return Icons.arrow_upward;
+    }
+    if (direction.row > 0) {
+      return Icons.arrow_downward;
+    }
+    if (direction.column < 0) {
+      return Icons.arrow_back;
+    }
+
+    return Icons.arrow_forward;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortestSide = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final iconSize = math.min(22.0, shortestSide * 0.7);
+
+        return Center(
+          child: Icon(
+            _icon,
+            size: iconSize,
+            color: Colors.white,
+            shadows: const [Shadow(color: Color(0x99000000), blurRadius: 3)],
           ),
         );
       },

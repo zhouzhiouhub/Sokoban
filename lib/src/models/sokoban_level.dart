@@ -7,6 +7,7 @@ class SokobanLevel {
     required this.description,
     required this.layout,
     required this.initialPlayerPosition,
+    this.hintTexts = const [],
   });
 
   final int number;
@@ -14,6 +15,7 @@ class SokobanLevel {
   final String description;
   final List<String> layout;
   final BoardPosition initialPlayerPosition;
+  final List<String> hintTexts;
 
   String get displayName => 'Level $number — $title';
 }

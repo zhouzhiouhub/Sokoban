@@ -15,6 +15,9 @@ class SokobanBoard extends StatelessWidget {
     required this.brickPositions,
     required this.targetPositions,
     required this.playerPosition,
+    this.hintedBrickPosition,
+    this.hintDirection,
+    this.hintPushTargetPosition,
   });
 
   static BoardViewportSize viewportSizeForLayout(List<String> layout) {
@@ -25,6 +28,9 @@ class SokobanBoard extends StatelessWidget {
   final Set<BoardPosition> brickPositions;
   final Set<BoardPosition> targetPositions;
   final BoardPosition playerPosition;
+  final BoardPosition? hintedBrickPosition;
+  final BoardPosition? hintDirection;
+  final BoardPosition? hintPushTargetPosition;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +94,11 @@ class SokobanBoard extends StatelessWidget {
                               ? BoardTile.brick
                               : tileAt(layout, row, column);
                           final isTarget = targetPositions.contains(position);
+                          final isHintedBrick =
+                              hintedBrickPosition == position &&
+                              tile == BoardTile.brick;
+                          final isHintPushTarget =
+                              hintPushTargetPosition == position;
                           final hasPlayer =
                               playerPosition.row == row &&
                               playerPosition.column == column;
@@ -99,6 +110,9 @@ class SokobanBoard extends StatelessWidget {
                             tile: tile,
                             isTarget: isTarget,
                             hasPlayer: hasPlayer,
+                            isHintedBrick: isHintedBrick,
+                            isHintPushTarget: isHintPushTarget,
+                            hintDirection: isHintedBrick ? hintDirection : null,
                           );
                         },
                       ),
