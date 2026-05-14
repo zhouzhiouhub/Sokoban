@@ -84,13 +84,11 @@ void main() {
 
     expect(find.byType(LevelSelectionPage), findsOneWidget);
     expect(find.text('选择关卡'), findsOneWidget);
-    for (
-      var levelNumber = 1;
-      levelNumber <= sokobanLevels.length;
-      levelNumber++
-    ) {
-      expect(find.text('$levelNumber'), findsOneWidget);
-    }
+    expect(find.text('1'), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    expect(find.text('${sokobanLevels.length}'), findsOneWidget);
   });
 
   testWidgets('opens a selected Sokoban level', (tester) async {
@@ -131,10 +129,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '导入'));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('自定义 1 - 导入测试'), findsOneWidget);
-
-    await tester.ensureVisible(find.byTooltip('自定义 1 - 导入测试'));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
     await tester.pumpAndSettle();
+    expect(find.byTooltip('自定义 1 - 导入测试'), findsOneWidget);
     await tester.tap(find.byTooltip('自定义 1 - 导入测试'));
     await tester.pumpAndSettle();
 

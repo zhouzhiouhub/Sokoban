@@ -53,6 +53,14 @@ SokobanLevel parseImportedSokobanLevelJson(
   return level;
 }
 
+Future<SokobanLevel> parseImportedSokobanLevelJsonAsync(
+  String source, {
+  SokobanLevelValidationOptions options = const SokobanLevelValidationOptions(),
+}) async {
+  await Future<void>.delayed(Duration.zero);
+  return parseImportedSokobanLevelJson(source, options: options);
+}
+
 List<String> validateImportedSokobanLevel(
   SokobanLevel level, {
   SokobanLevelValidationOptions options = const SokobanLevelValidationOptions(),

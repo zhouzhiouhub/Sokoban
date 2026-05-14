@@ -1,11 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../levels/custom_level_import_source.dart';
 import '../levels/custom_level_store.dart';
 import '../levels/level_catalog.dart';
-import '../levels/sokoban_level_import.dart';
 import 'sokoban_wall_page.dart';
 
 class LevelSelectionPage extends StatefulWidget {
@@ -20,6 +19,8 @@ class LevelSelectionPage extends StatefulWidget {
 class _LevelSelectionPageState extends State<LevelSelectionPage> {
   late final CustomLevelStore _customLevelStore =
       widget.customLevelStore ?? CustomLevelStore();
+  final CustomLevelImportSourceReader _importSourceReader =
+      const CustomLevelImportSourceReader();
   List<LevelCatalogItem> _customLevelCatalog = const [];
   bool _isLoadingCustomLevels = true;
   bool _isImporting = false;
@@ -79,7 +80,7 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
     });
 
     try {
-      final source = await _readImportSource(input);
+      final source = await _importSourceReader.read(input);
       final catalogItem = await _customLevelStore.importLevelJson(source);
       if (!mounted) {
         return;
@@ -101,43 +102,6 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
       });
       _showSnackBar('导入失败：$error');
     }
-  }
-
-  Future<String> _readImportSource(String input) async {
-    final trimmedInput = input.trim();
-    if (trimmedInput.isEmpty) {
-      throw const SokobanLevelImportException('导入内容不能为空。');
-    }
-
-    if (_looksLikeJson(trimmedInput)) {
-      return trimmedInput;
-    }
-
-    final file = File(_unquoteFilePath(trimmedInput));
-    if (!await file.exists()) {
-      throw const SokobanLevelImportException('未找到 JSON 文件，请检查路径。');
-    }
-
-    final byteCount = await file.length();
-    if (byteCount > maxCustomLevelImportBytes) {
-      throw const SokobanLevelImportException('JSON 文件不能超过 64 KB。');
-    }
-
-    return file.readAsString(encoding: utf8);
-  }
-
-  bool _looksLikeJson(String input) {
-    return input.startsWith('{') || input.startsWith('[');
-  }
-
-  String _unquoteFilePath(String path) {
-    if (path.length >= 2 &&
-        ((path.startsWith('"') && path.endsWith('"')) ||
-            (path.startsWith("'") && path.endsWith("'")))) {
-      return path.substring(1, path.length - 1);
-    }
-
-    return path;
   }
 
   Future<String?> _requestImportInput(BuildContext context) async {
@@ -174,41 +138,61 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
           builder: (context, constraints) {
             final horizontalPadding = constraints.maxWidth >= 720 ? 32.0 : 16.0;
             final maxGridWidth = constraints.maxWidth >= 720 ? 680.0 : 460.0;
+            final availableWidth = math.max(
+              0.0,
+              constraints.maxWidth - horizontalPadding * 2,
+            );
+            final gridWidth = math.min(maxGridWidth, availableWidth);
+            final sideInset =
+                horizontalPadding +
+                math.max(0.0, availableWidth - gridWidth) / 2;
+            final columnCount = math.max(
+              1,
+              ((gridWidth + 12) / (92 + 12)).floor(),
+            );
+            final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+            );
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                20,
-                horizontalPadding,
-                24,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxGridWidth),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle(title: '内置关卡'),
-                      const SizedBox(height: 12),
-                      _LevelTileWrap(
-                        items: builtInLevelCatalog,
-                        firstCatalogIndex: 0,
-                        customOffset: 0,
-                        fullCatalog: _levelCatalog,
-                      ),
-                      const SizedBox(height: 28),
-                      const _SectionTitle(title: '自定义关卡'),
-                      const SizedBox(height: 12),
-                      _CustomLevelSection(
-                        isLoading: _isLoadingCustomLevels,
-                        loadError: _customLevelLoadError,
-                        items: _customLevelCatalog,
-                        fullCatalog: _levelCatalog,
-                      ),
-                    ],
+            return CustomScrollView(
+              cacheExtent: 1400,
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sideInset, 20, sideInset, 0),
+                  sliver: const SliverToBoxAdapter(
+                    child: _SectionTitle(title: '内置关卡'),
                   ),
                 ),
-              ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sideInset, 12, sideInset, 0),
+                  sliver: _LevelTileSliverGrid(
+                    items: builtInLevelCatalog,
+                    firstCatalogIndex: 0,
+                    customOffset: 0,
+                    fullCatalog: _levelCatalog,
+                    gridDelegate: gridDelegate,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: sideInset),
+                  sliver: const SliverToBoxAdapter(
+                    child: _SectionTitle(title: '自定义关卡'),
+                  ),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(sideInset, 12, sideInset, 24),
+                  sliver: _CustomLevelSection(
+                    isLoading: _isLoadingCustomLevels,
+                    loadError: _customLevelLoadError,
+                    items: _customLevelCatalog,
+                    fullCatalog: _levelCatalog,
+                    gridDelegate: gridDelegate,
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -241,7 +225,6 @@ class _ImportLevelDialogState extends State<_ImportLevelDialog> {
         width: 520,
         child: TextField(
           controller: _controller,
-          autofocus: true,
           minLines: 8,
           maxLines: 12,
           textInputAction: TextInputAction.newline,
@@ -272,80 +255,89 @@ class _CustomLevelSection extends StatelessWidget {
     required this.loadError,
     required this.items,
     required this.fullCatalog,
+    required this.gridDelegate,
   });
 
   final bool isLoading;
   final String? loadError;
   final List<LevelCatalogItem> items;
   final List<LevelCatalogItem> fullCatalog;
+  final SliverGridDelegate gridDelegate;
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const SizedBox(
-        height: 72,
-        child: Center(child: CircularProgressIndicator()),
+      return const SliverToBoxAdapter(
+        child: SizedBox(
+          height: 72,
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     if (loadError != null) {
-      return _InlineMessage(
-        icon: Icons.warning_amber_rounded,
-        message: loadError!,
+      return SliverToBoxAdapter(
+        child: _InlineMessage(
+          icon: Icons.warning_amber_rounded,
+          message: loadError!,
+        ),
       );
     }
 
     if (items.isEmpty) {
-      return const _InlineMessage(
-        icon: Icons.inventory_2_outlined,
-        message: '还没有自定义关卡',
+      return const SliverToBoxAdapter(
+        child: _InlineMessage(
+          icon: Icons.inventory_2_outlined,
+          message: '还没有自定义关卡',
+        ),
       );
     }
 
-    return _LevelTileWrap(
+    return _LevelTileSliverGrid(
       items: items,
       firstCatalogIndex: builtInLevelCatalog.length,
       customOffset: 0,
       fullCatalog: fullCatalog,
+      gridDelegate: gridDelegate,
     );
   }
 }
 
-class _LevelTileWrap extends StatelessWidget {
-  const _LevelTileWrap({
+class _LevelTileSliverGrid extends StatelessWidget {
+  const _LevelTileSliverGrid({
     required this.items,
     required this.firstCatalogIndex,
     required this.customOffset,
     required this.fullCatalog,
+    required this.gridDelegate,
   });
 
   final List<LevelCatalogItem> items;
   final int firstCatalogIndex;
   final int customOffset;
   final List<LevelCatalogItem> fullCatalog;
+  final SliverGridDelegate gridDelegate;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        for (var index = 0; index < items.length; index++)
-          _LevelTile(
-            catalogItem: items[index],
-            displayIndex: index + customOffset + 1,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => SokobanWallPage(
-                    initialLevelIndex: firstCatalogIndex + index,
-                    levelCatalog: fullCatalog,
-                  ),
+    return SliverGrid(
+      gridDelegate: gridDelegate,
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return _LevelTile(
+          catalogItem: items[index],
+          displayIndex: index + customOffset + 1,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => SokobanWallPage(
+                  initialLevelIndex: firstCatalogIndex + index,
+                  levelCatalog: fullCatalog,
                 ),
-              );
-            },
-          ),
-      ],
+              ),
+            );
+          },
+        );
+      }, childCount: items.length),
     );
   }
 }

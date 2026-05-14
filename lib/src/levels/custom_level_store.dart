@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/sokoban_level.dart';
+import 'custom_level_limits.dart';
 import 'level_catalog.dart';
 import 'sokoban_level_import.dart';
 
-const int maxCustomLevelImportBytes = 64 * 1024;
+const int maxCustomLevelImportBytes = customLevelImportMaxBytes;
 
 class CustomLevelStoreException implements Exception {
   const CustomLevelStoreException(this.message);
@@ -25,7 +26,7 @@ class CustomLevelStore {
   final DateTime Function() _clock;
 
   Future<List<LevelCatalogItem>> loadCatalogItems() async {
-    final records = await _readRecords();
+    final records = await _readRecordsAsync();
     return [for (final record in records) record.toCatalogItem()];
   }
 
@@ -38,85 +39,60 @@ class CustomLevelStore {
       throw const SokobanLevelImportException('JSON 内容不能超过 64 KB。');
     }
 
-    final level = parseImportedSokobanLevelJson(trimmedSource);
-    final records = await _readRecords();
+    final level = await parseImportedSokobanLevelJsonAsync(trimmedSource);
+    final recordPayloads = await _readRecordPayloadsAsync();
     final importedAt = _clock();
     final record = _CustomLevelRecord(
-      id: _createCustomLevelId(importedAt, records),
+      id: _createCustomLevelId(importedAt, recordPayloads),
       importedAt: importedAt,
       level: level,
     );
 
-    final nextRecords = [...records, record];
-    await _writeRecords(nextRecords);
+    final nextRecordPayloads = [...recordPayloads, record.toJson()];
+    await _writeRecordPayloadsAsync(nextRecordPayloads);
     return record.toCatalogItem();
   }
 
-  Future<List<_CustomLevelRecord>> _readRecords() async {
-    if (!await _storageFile.exists()) {
+  Future<List<_CustomLevelRecord>> _readRecordsAsync() async {
+    final source = await _readStorageSource();
+    if (source == null) {
       return const [];
+    }
+
+    await Future<void>.delayed(Duration.zero);
+    return _recordsFromStorageSource(source);
+  }
+
+  Future<List<Map<String, Object?>>> _readRecordPayloadsAsync() async {
+    final source = await _readStorageSource();
+    if (source == null) {
+      return const [];
+    }
+
+    await Future<void>.delayed(Duration.zero);
+    return _recordPayloadsFromStorageSource(source);
+  }
+
+  Future<String?> _readStorageSource() async {
+    if (!await _storageFile.exists()) {
+      return null;
     }
 
     final source = await _storageFile.readAsString();
     if (source.trim().isEmpty) {
-      return const [];
+      return null;
     }
 
-    final Object? payload;
-    try {
-      payload = jsonDecode(source);
-    } on FormatException {
-      throw const CustomLevelStoreException('自定义关卡库文件无法解析。');
-    }
-
-    if (payload is! Map<String, Object?>) {
-      throw const CustomLevelStoreException('自定义关卡库根节点必须是对象。');
-    }
-
-    final levelsPayload = payload['levels'];
-    if (levelsPayload is! List<Object?>) {
-      throw const CustomLevelStoreException('自定义关卡库缺少 levels 列表。');
-    }
-
-    final records = <_CustomLevelRecord>[];
-    for (var index = 0; index < levelsPayload.length; index++) {
-      final recordPayload = levelsPayload[index];
-      if (recordPayload is! Map<String, Object?>) {
-        throw CustomLevelStoreException('第 ${index + 1} 个自定义关卡记录格式无效。');
-      }
-
-      final levelPayload = recordPayload['level'];
-      if (levelPayload is! Map<String, Object?>) {
-        throw CustomLevelStoreException('第 ${index + 1} 个自定义关卡缺少 level。');
-      }
-
-      try {
-        records.add(
-          _CustomLevelRecord(
-            id: _requiredString(recordPayload, 'id'),
-            importedAt: _requiredDateTime(recordPayload, 'importedAt'),
-            level: parseImportedSokobanLevelJson(jsonEncode(levelPayload)),
-          ),
-        );
-      } on SokobanLevelImportException catch (error) {
-        throw CustomLevelStoreException(
-          '第 ${index + 1} 个自定义关卡无效：${error.message}',
-        );
-      }
-    }
-
-    return records;
+    return source;
   }
 
-  Future<void> _writeRecords(List<_CustomLevelRecord> records) async {
+  Future<void> _writeRecordPayloadsAsync(
+    List<Map<String, Object?>> recordPayloads,
+  ) async {
     await _storageFile.parent.create(recursive: true);
-    const encoder = JsonEncoder.withIndent('  ');
-    final payload = <String, Object?>{
-      'schemaVersion': 1,
-      'levels': [for (final record in records) record.toJson()],
-    };
-
-    await _storageFile.writeAsString('${encoder.convert(payload)}\n');
+    await Future<void>.delayed(Duration.zero);
+    final source = _encodeRecordPayloads(recordPayloads);
+    await _storageFile.writeAsString(source);
   }
 }
 
@@ -160,7 +136,7 @@ Map<String, Object?> _sokobanLevelToJson(SokobanLevel level) {
 
 String _createCustomLevelId(
   DateTime importedAt,
-  List<_CustomLevelRecord> existingRecords,
+  List<Map<String, Object?>> existingRecordPayloads,
 ) {
   final base =
       'custom_'
@@ -171,8 +147,11 @@ String _createCustomLevelId(
       '${_pad(importedAt.minute, 2)}'
       '${_pad(importedAt.second, 2)}_'
       '${_pad(importedAt.millisecond, 3)}';
-  final existingIds = {for (final record in existingRecords) record.id};
-  var sequence = existingRecords.length + 1;
+  final existingIds = {
+    for (final recordPayload in existingRecordPayloads)
+      _requiredString(recordPayload, 'id'),
+  };
+  var sequence = existingRecordPayloads.length + 1;
 
   while (true) {
     final id = '${base}_${_pad(sequence, 3)}';
@@ -184,6 +163,76 @@ String _createCustomLevelId(
 }
 
 String _pad(int value, int width) => value.toString().padLeft(width, '0');
+
+List<_CustomLevelRecord> _recordsFromStorageSource(String source) {
+  final recordPayloads = _recordPayloadsFromStorageSource(source);
+  final records = <_CustomLevelRecord>[];
+
+  for (var index = 0; index < recordPayloads.length; index++) {
+    final recordPayload = recordPayloads[index];
+    final levelPayload = recordPayload['level'];
+    if (levelPayload is! Map<String, Object?>) {
+      throw CustomLevelStoreException('第 ${index + 1} 个自定义关卡缺少 level。');
+    }
+
+    try {
+      records.add(
+        _CustomLevelRecord(
+          id: _requiredString(recordPayload, 'id'),
+          importedAt: _requiredDateTime(recordPayload, 'importedAt'),
+          level: parseImportedSokobanLevelJson(jsonEncode(levelPayload)),
+        ),
+      );
+    } on SokobanLevelImportException catch (error) {
+      throw CustomLevelStoreException(
+        '第 ${index + 1} 个自定义关卡无效：${error.message}',
+      );
+    }
+  }
+
+  return records;
+}
+
+List<Map<String, Object?>> _recordPayloadsFromStorageSource(String source) {
+  final Object? payload;
+  try {
+    payload = jsonDecode(source);
+  } on FormatException {
+    throw const CustomLevelStoreException('自定义关卡库文件无法解析。');
+  }
+
+  if (payload is! Map<String, Object?>) {
+    throw const CustomLevelStoreException('自定义关卡库根节点必须是对象。');
+  }
+
+  final levelsPayload = payload['levels'];
+  if (levelsPayload is! List<Object?>) {
+    throw const CustomLevelStoreException('自定义关卡库缺少 levels 列表。');
+  }
+
+  final recordPayloads = <Map<String, Object?>>[];
+  for (var index = 0; index < levelsPayload.length; index++) {
+    final recordPayload = levelsPayload[index];
+    if (recordPayload is! Map<String, Object?>) {
+      throw CustomLevelStoreException('第 ${index + 1} 个自定义关卡记录格式无效。');
+    }
+
+    _requiredString(recordPayload, 'id');
+    recordPayloads.add(Map<String, Object?>.from(recordPayload));
+  }
+
+  return recordPayloads;
+}
+
+String _encodeRecordPayloads(List<Map<String, Object?>> recordPayloads) {
+  const encoder = JsonEncoder.withIndent('  ');
+  final payload = <String, Object?>{
+    'schemaVersion': 1,
+    'levels': recordPayloads,
+  };
+
+  return '${encoder.convert(payload)}\n';
+}
 
 String _requiredString(Map<String, Object?> payload, String key) {
   final value = payload[key];
