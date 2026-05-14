@@ -5,7 +5,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 
-CELL_SIZE = 34
+CELL_SIZE = 30
+BOARD_LABEL_MARGIN = 28
+VISIBLE_BOARD_CELLS = 20
+BOARD_VIEW_SIZE = BOARD_LABEL_MARGIN + VISIBLE_BOARD_CELLS * CELL_SIZE
 DEFAULT_ROWS = 10
 DEFAULT_COLUMNS = 15
 MAX_ROWS = 40
@@ -135,7 +138,9 @@ class SokobanLevelGenerator(tk.Tk):
         self._level_number_is_custom = False
         self._updating_level_number = False
         self.level_number_var = tk.IntVar(value=self._auto_level_number)
-        self.level_title_var = tk.StringVar(value="自定义关卡")
+        self.level_title_var = tk.StringVar(
+            value=self._level_title_for_number(self._auto_level_number)
+        )
         self.description_var = tk.StringVar(value="把箱子推到目标点。")
         self.tool_var = tk.StringVar(value="wall")
         self.status_var = tk.StringVar(
@@ -150,100 +155,107 @@ class SokobanLevelGenerator(tk.Tk):
         self._build_ui()
         self._create_grid(DEFAULT_ROWS, DEFAULT_COLUMNS)
         self._bind_shortcuts()
-        self.level_number_var.trace_add("write", self._mark_level_number_custom)
+        self.level_number_var.trace_add("write", self._handle_level_number_change)
 
     def _build_ui(self):
         root = ttk.Frame(self, padding=12)
         root.pack(fill=tk.BOTH, expand=True)
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(2, weight=1)
+        root.columnconfigure(0, weight=0)
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(0, weight=1)
 
-        settings = ttk.LabelFrame(root, text="关卡信息", padding=10)
+        sidebar = ttk.Frame(root)
+        sidebar.grid(row=0, column=0, sticky="nsw", padx=(0, 12))
+        sidebar.columnconfigure(0, weight=1)
+
+        settings = ttk.LabelFrame(sidebar, text="关卡信息", padding=10)
         settings.grid(row=0, column=0, sticky="ew")
-        for index in range(8):
-            settings.columnconfigure(index, weight=1)
+        settings.columnconfigure(1, weight=1)
 
-        ttk.Label(settings, text="行").grid(row=0, column=0, sticky="w")
-        ttk.Spinbox(
-            settings,
-            from_=3,
-            to=MAX_ROWS,
-            textvariable=self.rows_var,
-            width=5,
-        ).grid(row=0, column=1, sticky="w")
-
-        ttk.Label(settings, text="列").grid(row=0, column=2, sticky="w")
-        ttk.Spinbox(
-            settings,
-            from_=3,
-            to=MAX_COLUMNS,
-            textvariable=self.columns_var,
-            width=5,
-        ).grid(row=0, column=3, sticky="w")
-
-        ttk.Button(settings, text="重建矩阵", command=self._rebuild_grid).grid(
-            row=0,
-            column=4,
-            sticky="w",
-            padx=(8, 0),
-        )
-        ttk.Button(settings, text="清空为地板", command=self._clear_to_floor).grid(
-            row=0,
-            column=5,
-            sticky="w",
-            padx=(8, 0),
-        )
-        ttk.Button(settings, text="生成外框墙", command=self._add_border_walls).grid(
-            row=0,
-            column=6,
-            sticky="w",
-            padx=(8, 0),
-        )
-
-        ttk.Label(settings, text="关卡号").grid(
-            row=1,
-            column=0,
-            sticky="w",
-            pady=(8, 0),
-        )
+        ttk.Label(settings, text="关卡号").grid(row=0, column=0, sticky="w")
         ttk.Spinbox(
             settings,
             from_=1,
             to=999,
             textvariable=self.level_number_var,
             width=7,
-        ).grid(row=1, column=1, sticky="w", pady=(8, 0))
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
         ttk.Label(settings, text="标题").grid(
             row=1,
-            column=2,
+            column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(settings, textvariable=self.level_title_var, width=20).grid(
+        ttk.Label(settings, textvariable=self.level_title_var, anchor="w").grid(
             row=1,
-            column=3,
-            columnspan=2,
+            column=1,
             sticky="ew",
+            padx=(8, 0),
             pady=(8, 0),
         )
 
         ttk.Label(settings, text="描述").grid(
-            row=1,
-            column=5,
+            row=2,
+            column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(settings, textvariable=self.description_var, width=42).grid(
-            row=1,
-            column=6,
+        ttk.Entry(settings, textvariable=self.description_var, width=28).grid(
+            row=2,
+            column=1,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+
+        matrix = ttk.LabelFrame(sidebar, text="矩阵", padding=10)
+        matrix.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        matrix.columnconfigure(1, weight=1)
+
+        ttk.Label(matrix, text="行").grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(
+            matrix,
+            from_=3,
+            to=MAX_ROWS,
+            textvariable=self.rows_var,
+            width=5,
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        ttk.Label(matrix, text="列").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Spinbox(
+            matrix,
+            from_=3,
+            to=MAX_COLUMNS,
+            textvariable=self.columns_var,
+            width=5,
+        ).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(8, 0))
+
+        ttk.Button(matrix, text="重建矩阵", command=self._rebuild_grid).grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(6, 0),
+        )
+        ttk.Button(matrix, text="清空为地板", command=self._clear_to_floor).grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        ttk.Button(matrix, text="生成外框墙", command=self._add_border_walls).grid(
+            row=4,
+            column=0,
             columnspan=2,
             sticky="ew",
             pady=(8, 0),
         )
 
-        tools = ttk.LabelFrame(root, text="工具", padding=10)
-        tools.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        tools = ttk.LabelFrame(sidebar, text="工具", padding=10)
+        tools.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        tools.columnconfigure(0, weight=1)
 
         for index, tool in enumerate(TOOL_LABELS):
             label = f"{TOOL_KEYS[tool]} {TOOL_LABELS[tool]}"
@@ -252,23 +264,26 @@ class SokobanLevelGenerator(tk.Tk):
                 text=label,
                 variable=self.tool_var,
                 value=tool,
-            ).grid(row=0, column=index, sticky="w", padx=(0, 12))
+            ).grid(row=index, column=0, sticky="w", pady=(0, 6))
 
-        ttk.Button(tools, text="导出 Dart 片段", command=self._export_dart).grid(
+        export = ttk.LabelFrame(sidebar, text="导出", padding=10)
+        export.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        export.columnconfigure(0, weight=1)
+
+        ttk.Button(export, text="导出 Dart 片段", command=self._export_dart).grid(
             row=0,
-            column=len(TOOL_LABELS),
-            sticky="e",
-            padx=(16, 0),
+            column=0,
+            sticky="ew",
         )
-        ttk.Button(tools, text="导出 JSON", command=self._export_json).grid(
-            row=0,
-            column=len(TOOL_LABELS) + 1,
-            sticky="e",
-            padx=(8, 0),
+        ttk.Button(export, text="导出 JSON", command=self._export_json).grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            pady=(8, 0),
         )
 
-        board_frame = ttk.Frame(root)
-        board_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
+        board_frame = ttk.LabelFrame(root, text="编辑区", padding=10)
+        board_frame.grid(row=0, column=1, sticky="nsew")
         board_frame.rowconfigure(0, weight=1)
         board_frame.columnconfigure(0, weight=1)
 
@@ -277,6 +292,8 @@ class SokobanLevelGenerator(tk.Tk):
             background="#ffffff",
             highlightthickness=1,
             highlightbackground="#cbd5e1",
+            width=BOARD_VIEW_SIZE,
+            height=BOARD_VIEW_SIZE,
         )
         y_scrollbar = ttk.Scrollbar(
             board_frame,
@@ -302,18 +319,36 @@ class SokobanLevelGenerator(tk.Tk):
         self.canvas.bind("<Button-3>", self._erase_from_event)
 
         status = ttk.Label(root, textvariable=self.status_var, anchor="w")
-        status.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        status.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
     def _bind_shortcuts(self):
         for tool, key in TOOL_KEYS.items():
             self.bind(key, lambda _event, selected=tool: self.tool_var.set(selected))
         self.bind("<Control-s>", lambda _event: self._export_dart())
 
-    def _mark_level_number_custom(self, *_args):
+    def _handle_level_number_change(self, *_args):
+        self._sync_level_title()
         if self._updating_level_number:
             return
 
         self._level_number_is_custom = True
+
+    @staticmethod
+    def _level_title_for_number(number):
+        return "第{0}关".format(number)
+
+    def _current_level_number(self):
+        try:
+            value = self.level_number_var.get()
+        except tk.TclError:
+            value = self._auto_level_number
+
+        return self._safe_int(value, self._auto_level_number, 1, 999)
+
+    def _sync_level_title(self):
+        self.level_title_var.set(
+            self._level_title_for_number(self._current_level_number())
+        )
 
     def _refresh_auto_level_number(self):
         if self._level_number_is_custom:
@@ -328,6 +363,7 @@ class SokobanLevelGenerator(tk.Tk):
             self.level_number_var.set(number)
         finally:
             self._updating_level_number = False
+        self._sync_level_title()
 
     def _create_grid(self, rows, columns):
         self.grid_data = [[SYMBOLS["floor"] for _ in range(columns)] for _ in range(rows)]
@@ -343,7 +379,29 @@ class SokobanLevelGenerator(tk.Tk):
         columns = len(self.grid_data[0]) if rows else 0
         width = columns * CELL_SIZE
         height = rows * CELL_SIZE
-        self.canvas.configure(scrollregion=(0, 0, width, height))
+        self.canvas.configure(
+            scrollregion=(-BOARD_LABEL_MARGIN, -BOARD_LABEL_MARGIN, width, height)
+        )
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
+
+        for column in range(columns):
+            self.canvas.create_text(
+                column * CELL_SIZE + CELL_SIZE / 2,
+                -BOARD_LABEL_MARGIN / 2,
+                text=str(column),
+                fill="#475569",
+                font=("Segoe UI", 9, "bold"),
+            )
+
+        for row in range(rows):
+            self.canvas.create_text(
+                -BOARD_LABEL_MARGIN / 2,
+                row * CELL_SIZE + CELL_SIZE / 2,
+                text=str(row),
+                fill="#475569",
+                font=("Segoe UI", 9, "bold"),
+            )
 
         for row in range(rows):
             for column in range(columns):
@@ -565,9 +623,13 @@ class SokobanLevelGenerator(tk.Tk):
                 f"目标点 {target_count} 个。"
             )
 
+        level_number = self._current_level_number()
+        title = self._level_title_for_number(level_number)
+        self.level_title_var.set(title)
+
         return {
-            "number": self._safe_int(self.level_number_var.get(), 1, 1, 999),
-            "title": self.level_title_var.get().strip() or "自定义关卡",
+            "number": level_number,
+            "title": title,
             "description": self.description_var.get().strip(),
             "layout": self._layout_rows(),
             "initialPlayerPosition": {
