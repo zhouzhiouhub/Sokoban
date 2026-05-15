@@ -478,24 +478,25 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 3, column: 7),
   ),
 
-    SokobanLevel(
+  SokobanLevel(
     number: 26,
     title: '第26关',
     description: '把箱子推到目标点。',
     layout: [
       '               ',
+      '               ',
+      '       ####    ',
+      '     ### T#    ',
+      '     # B T#    ',
+      '     #  B #    ',
+      '     ##  ##    ',
       '      ####     ',
-      '      # T#     ',
-      '    ### T#     ',
-      '    #  B #     ',
-      '    #   B#     ',
-      '    ##  ##     ',
-      '     ####      ',
       '               ',
       '               ',
     ],
     initialPlayerPosition: BoardPosition(row: 6, column: 7),
   ),
+
   SokobanLevel(
     number: 27,
     title: '第27关',

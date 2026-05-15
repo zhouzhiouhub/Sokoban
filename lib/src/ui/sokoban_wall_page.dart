@@ -64,7 +64,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       widget.levelCatalog ?? builtInLevelCatalog,
     );
     _loadLevel(_normalisedLevelIndex(widget.initialLevelIndex));
-    _showLoadedLevelIssueDialogIfNeeded(afterBuild: true);
+    _showLoadedLevelStatusDialogIfNeeded(afterBuild: true);
   }
 
   int _normalisedLevelIndex(int levelIndex) {
@@ -182,17 +182,20 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     _hintPushTargetPosition = null;
   }
 
-  void _showLoadedLevelIssueDialogIfNeeded({bool afterBuild = false}) {
+  void _showLoadedLevelStatusDialogIfNeeded({bool afterBuild = false}) {
     final issueMessage = _levelValidationMessage ?? _deadlockMessage;
-    if (issueMessage == null) {
+    if (issueMessage != null) {
+      final title = _levelValidationMessage != null ? '关卡无效' : '死局';
+      if (afterBuild) {
+        _showStatusDialogAfterBuild(title: title, message: issueMessage);
+      } else {
+        _showStatusDialog(title: title, message: issueMessage);
+      }
       return;
     }
 
-    final title = _levelValidationMessage != null ? '关卡无效' : '死局';
-    if (afterBuild) {
-      _showStatusDialogAfterBuild(title: title, message: issueMessage);
-    } else {
-      _showStatusDialog(title: title, message: issueMessage);
+    if (_isLevelComplete) {
+      _showCompletionDialog(afterBuild: afterBuild);
     }
   }
 
@@ -238,31 +241,42 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     );
   }
 
-  void _showCompletionDialog() {
+  void _showCompletionDialog({bool afterBuild = false}) {
     final hasNextLevel = _currentLevelIndex < _levelCatalog.length - 1;
+
+    List<Widget> buildActions(BuildContext dialogContext) {
+      return [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('留在本关'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(dialogContext).pop();
+            if (hasNextLevel) {
+              _changeLevel(_currentLevelIndex + 1);
+            } else {
+              _resetCurrentLevel();
+            }
+          },
+          child: Text(hasNextLevel ? '下一关' : '重玩本关'),
+        ),
+      ];
+    }
+
+    if (afterBuild) {
+      _showStatusDialogAfterBuild(
+        title: '过关',
+        message: '全部箱子已到目标点，过关！',
+        actionsBuilder: buildActions,
+      );
+      return;
+    }
 
     _showStatusDialog(
       title: '过关',
       message: '全部箱子已到目标点，过关！',
-      actionsBuilder: (dialogContext) {
-        return [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('留在本关'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (hasNextLevel) {
-                _changeLevel(_currentLevelIndex + 1);
-              } else {
-                _resetCurrentLevel();
-              }
-            },
-            child: Text(hasNextLevel ? '下一关' : '重玩本关'),
-          ),
-        ];
-      },
+      actionsBuilder: buildActions,
     );
   }
 
@@ -278,7 +292,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     setState(() {
       _loadLevel(_currentLevelIndex);
     });
-    _showLoadedLevelIssueDialogIfNeeded();
+    _showLoadedLevelStatusDialogIfNeeded();
   }
 
   void _changeLevel(int levelIndex) {
@@ -291,7 +305,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     setState(() {
       _loadLevel(levelIndex);
     });
-    _showLoadedLevelIssueDialogIfNeeded();
+    _showLoadedLevelStatusDialogIfNeeded();
   }
 
   void _undoMove() {

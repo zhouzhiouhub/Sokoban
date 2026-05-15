@@ -18,6 +18,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPORT_DIR = PROJECT_ROOT / "tools" / "generated_levels"
 LEVEL_NUMBER_PATTERN = re.compile(r"\bnumber\s*:\s*(\d+)\b")
 LEVEL_FILENAME_PATTERN = re.compile(r"level[_-]?(\d+)", re.IGNORECASE)
+DART_STRING_LITERAL_PATTERN = re.compile(
+    r"'((?:\\.|[^'\\])*)'|\"((?:\\.|[^\"\\])*)\""
+)
+DART_LAYOUT_PATTERN = re.compile(r"\blayout\s*:\s*\[(.*?)\]", re.DOTALL)
+DART_PLAYER_PATTERN = re.compile(
+    r"\binitialPlayerPosition\s*:\s*BoardPosition\s*\(\s*"
+    r"row\s*:\s*(-?\d+)\s*,\s*column\s*:\s*(-?\d+)\s*\)",
+    re.DOTALL,
+)
 
 SYMBOLS = {
     "outside": "_",
@@ -26,6 +35,21 @@ SYMBOLS = {
     "box": "B",
     "target": "T",
     "box_target": "*",
+}
+
+IMPORT_SYMBOLS = {
+    "_": (SYMBOLS["outside"], False),
+    " ": (SYMBOLS["floor"], False),
+    "#": (SYMBOLS["wall"], False),
+    "B": (SYMBOLS["box"], False),
+    "$": (SYMBOLS["box"], False),
+    "T": (SYMBOLS["target"], False),
+    ".": (SYMBOLS["target"], False),
+    "*": (SYMBOLS["box_target"], False),
+    "P": (SYMBOLS["floor"], True),
+    "p": (SYMBOLS["floor"], True),
+    "@": (SYMBOLS["floor"], True),
+    "+": (SYMBOLS["target"], True),
 }
 
 TOOL_LABELS = {
@@ -121,6 +145,177 @@ def _level_number_from_text(path):
 
     match = LEVEL_NUMBER_PATTERN.search(text)
     return int(match.group(1)) if match else None
+
+
+def imported_level_payload_from_file(path):
+    path = Path(path)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"无法读取文件：{error}") from error
+
+    parse_errors = []
+    looks_like_json = path.suffix.lower() == ".json" or source.lstrip().startswith("{")
+    if looks_like_json:
+        try:
+            return _import_payload_from_json_text(source, path)
+        except ValueError as error:
+            if path.suffix.lower() == ".json":
+                raise
+            parse_errors.append(str(error))
+
+    try:
+        return _import_payload_from_dart_text(source, path)
+    except ValueError as error:
+        if parse_errors:
+            raise ValueError(f"{parse_errors[0]}\n{error}") from error
+        raise
+
+
+def _import_payload_from_json_text(source, path):
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"JSON 无法解析：{error}") from error
+
+    return _coerce_import_payload(
+        payload,
+        fallback_number=_level_number_from_filename(path),
+    )
+
+
+def _import_payload_from_dart_text(source, path):
+    number_match = LEVEL_NUMBER_PATTERN.search(source)
+    number = int(number_match.group(1)) if number_match else None
+
+    layout_match = DART_LAYOUT_PATTERN.search(source)
+    if layout_match is None:
+        raise ValueError("未找到 Dart layout 列表。")
+
+    layout = list(_iter_dart_string_literals(layout_match.group(1)))
+    if not layout:
+        raise ValueError("Dart layout 列表为空。")
+
+    player_match = DART_PLAYER_PATTERN.search(source)
+    player_position = None
+    if player_match:
+        player_position = {
+            "row": int(player_match.group(1)),
+            "column": int(player_match.group(2)),
+        }
+
+    return _coerce_import_payload(
+        {
+            "number": number,
+            "title": _dart_string_field(source, "title"),
+            "description": _dart_string_field(source, "description"),
+            "layout": layout,
+            "initialPlayerPosition": player_position,
+        },
+        fallback_number=_level_number_from_filename(path),
+    )
+
+
+def _coerce_import_payload(payload, fallback_number=None):
+    if not isinstance(payload, dict):
+        raise ValueError("关卡根节点必须是对象。")
+
+    layout_value = payload.get("layout")
+    if not isinstance(layout_value, list):
+        raise ValueError("缺少 layout，或 layout 不是字符串列表。")
+
+    layout = []
+    for index, row in enumerate(layout_value):
+        if not isinstance(row, str):
+            raise ValueError(f"layout 第 {index + 1} 行不是字符串。")
+        layout.append(row)
+
+    number = _coerce_level_number(payload.get("number"), fallback_number)
+    title = payload.get("title")
+    description = payload.get("description")
+
+    return {
+        "number": number,
+        "title": title.strip() if isinstance(title, str) and title.strip() else None,
+        "description": description.strip() if isinstance(description, str) else "",
+        "layout": layout,
+        "initialPlayerPosition": _coerce_player_position(
+            payload.get("initialPlayerPosition")
+        ),
+    }
+
+
+def _coerce_level_number(value, fallback_number):
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    if isinstance(fallback_number, int):
+        return fallback_number
+    return 1
+
+
+def _coerce_player_position(value):
+    if not isinstance(value, dict):
+        return None
+
+    row = value.get("row")
+    column = value.get("column")
+    if not isinstance(row, int) or not isinstance(column, int):
+        return None
+
+    return {"row": row, "column": column}
+
+
+def _level_number_from_filename(path):
+    match = LEVEL_FILENAME_PATTERN.search(Path(path).stem)
+    return int(match.group(1)) if match else None
+
+
+def _dart_string_field(source, field):
+    match = re.search(
+        rf"\b{re.escape(field)}\s*:\s*(?:'((?:\\.|[^'\\])*)'|\"((?:\\.|[^\"\\])*)\")",
+        source,
+        re.DOTALL,
+    )
+    return _dart_string_literal_value(match) if match else None
+
+
+def _iter_dart_string_literals(source):
+    for match in DART_STRING_LITERAL_PATTERN.finditer(source):
+        yield _dart_string_literal_value(match)
+
+
+def _dart_string_literal_value(match):
+    escaped = match.group(1) if match.group(1) is not None else match.group(2)
+    return _unescape_dart_string(escaped)
+
+
+def _unescape_dart_string(value):
+    result = []
+    escaping = False
+    escapes = {
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "\\": "\\",
+        "'": "'",
+        '"': '"',
+    }
+
+    for char in value:
+        if escaping:
+            result.append(escapes.get(char, char))
+            escaping = False
+        elif char == "\\":
+            escaping = True
+        else:
+            result.append(char)
+
+    if escaping:
+        result.append("\\")
+
+    return "".join(result)
 
 
 class SokobanLevelGenerator(tk.Tk):
@@ -266,17 +461,23 @@ class SokobanLevelGenerator(tk.Tk):
                 value=tool,
             ).grid(row=index, column=0, sticky="w", pady=(0, 6))
 
-        export = ttk.LabelFrame(sidebar, text="导出", padding=10)
+        export = ttk.LabelFrame(sidebar, text="导入/导出", padding=10)
         export.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         export.columnconfigure(0, weight=1)
 
-        ttk.Button(export, text="导出 Dart 片段", command=self._export_dart).grid(
+        ttk.Button(export, text="导入 JSON/Dart", command=self._import_level).grid(
             row=0,
             column=0,
             sticky="ew",
         )
-        ttk.Button(export, text="导出 JSON", command=self._export_json).grid(
+        ttk.Button(export, text="导出 Dart 片段", command=self._export_dart).grid(
             row=1,
+            column=0,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        ttk.Button(export, text="导出 JSON", command=self._export_json).grid(
+            row=2,
             column=0,
             sticky="ew",
             pady=(8, 0),
@@ -325,6 +526,7 @@ class SokobanLevelGenerator(tk.Tk):
         for tool, key in TOOL_KEYS.items():
             self.bind(key, lambda _event, selected=tool: self.tool_var.set(selected))
         self.bind("<Control-s>", lambda _event: self._export_dart())
+        self.bind("<Control-o>", lambda _event: self._import_level())
 
     def _handle_level_number_change(self, *_args):
         self._sync_level_title()
@@ -600,6 +802,186 @@ class SokobanLevelGenerator(tk.Tk):
     def _layout_rows(self):
         return ["".join(row) for row in self.grid_data]
 
+    def _import_level(self):
+        path = filedialog.askopenfilename(
+            title="导入关卡",
+            initialdir=str(DEFAULT_EXPORT_DIR),
+            filetypes=[
+                ("关卡文件", "*.json *.txt *.dart"),
+                ("JSON", "*.json"),
+                ("Dart/文本", "*.dart *.txt"),
+                ("所有文件", "*.*"),
+            ],
+        )
+        if not path:
+            return
+
+        import_path = Path(path)
+        try:
+            payload = imported_level_payload_from_file(import_path)
+            warnings = self._load_imported_level(payload)
+        except ValueError as error:
+            messagebox.showerror("无法导入", str(error))
+            return
+
+        rows = len(self.grid_data)
+        columns = len(self.grid_data[0]) if rows else 0
+        if warnings:
+            self.status_var.set(
+                f"已导入 {import_path.name}（{rows} x {columns}）。"
+                f"发现 {len(warnings)} 个需要修改的提示。"
+            )
+            messagebox.showwarning(
+                "已导入，存在需要修改的地方",
+                self._warning_message(warnings),
+            )
+            return
+
+        self.status_var.set(f"已导入 {import_path.name}（{rows} x {columns}）。")
+        messagebox.showinfo("导入完成", f"已导入关卡：\n{import_path}")
+
+    def _load_imported_level(self, payload):
+        grid_data, player_position, warnings = self._normalized_import_grid(
+            payload["layout"],
+            payload["initialPlayerPosition"],
+        )
+
+        rows = len(grid_data)
+        columns = len(grid_data[0]) if rows else 0
+        level_number = self._safe_int(
+            payload["number"],
+            self._auto_level_number,
+            1,
+            999,
+        )
+
+        self.rows_var.set(rows)
+        self.columns_var.set(columns)
+        self.description_var.set(payload["description"])
+        self.level_number_var.set(level_number)
+        self._level_number_is_custom = True
+        self._sync_level_title()
+
+        self.grid_data = grid_data
+        self.player_position = player_position
+        self._draw_grid()
+
+        warnings.extend(self._import_edit_warnings())
+        return warnings
+
+    def _normalized_import_grid(self, layout, payload_player_position):
+        if not layout:
+            raise ValueError("layout 不能为空。")
+
+        rows = len(layout)
+        columns = max(len(row) for row in layout)
+        if columns == 0:
+            raise ValueError("layout 的行不能为空字符串。")
+        if rows > MAX_ROWS:
+            raise ValueError(f"当前关卡行数为 {rows}，最多支持 {MAX_ROWS} 行。")
+        if columns > MAX_COLUMNS:
+            raise ValueError(f"当前关卡列数为 {columns}，最多支持 {MAX_COLUMNS} 列。")
+
+        warnings = []
+        if any(len(row) != columns for row in layout):
+            warnings.append("layout 行长度不一致，短行已用地板补齐。")
+
+        grid_data = []
+        inline_player_position = None
+        extra_inline_players = 0
+        for row_index, row_text in enumerate(layout):
+            cells = []
+            for column_index in range(columns):
+                char = (
+                    row_text[column_index]
+                    if column_index < len(row_text)
+                    else SYMBOLS["floor"]
+                )
+                symbol, has_player = self._import_symbol_for_char(
+                    char,
+                    row_index,
+                    column_index,
+                )
+                if has_player:
+                    if inline_player_position is None:
+                        inline_player_position = (row_index, column_index)
+                    else:
+                        extra_inline_players += 1
+                cells.append(symbol)
+            grid_data.append(cells)
+
+        if extra_inline_players:
+            warnings.append("layout 中存在多个玩家符号，仅保留第一个。")
+
+        player_position = inline_player_position
+        if payload_player_position is not None:
+            imported_position = (
+                payload_player_position["row"],
+                payload_player_position["column"],
+            )
+            if self._position_inside_grid(imported_position, rows, columns):
+                if inline_player_position and inline_player_position != imported_position:
+                    warnings.append(
+                        "layout 中的玩家符号与 initialPlayerPosition 不一致，"
+                        "已使用 initialPlayerPosition。"
+                    )
+                player_position = imported_position
+            elif inline_player_position:
+                warnings.append(
+                    "initialPlayerPosition 越界，已使用 layout 中的玩家符号。"
+                )
+            else:
+                warnings.append("initialPlayerPosition 越界，已清空玩家位置。")
+
+        return grid_data, player_position, warnings
+
+    def _import_symbol_for_char(self, char, row, column):
+        if char not in IMPORT_SYMBOLS:
+            raise ValueError(
+                f"layout 第 {row + 1} 行第 {column + 1} 列存在非法字符 `{char}`。"
+            )
+
+        return IMPORT_SYMBOLS[char]
+
+    @staticmethod
+    def _position_inside_grid(position, rows, columns):
+        row, column = position
+        return 0 <= row < rows and 0 <= column < columns
+
+    def _import_edit_warnings(self):
+        warnings = []
+        if self.player_position is None:
+            warnings.append("未找到玩家位置，导出前请放置玩家。")
+        else:
+            player_row, player_column = self.player_position
+            player_symbol = self.grid_data[player_row][player_column]
+            if player_symbol in (SYMBOLS["wall"], SYMBOLS["outside"]):
+                warnings.append("玩家初始位置位于墙体或棋盘外，导出前需要修正。")
+            elif player_symbol in (SYMBOLS["box"], SYMBOLS["box_target"]):
+                warnings.append("玩家初始位置和箱子重叠，导出前需要修正。")
+
+        box_count = self._count_symbols(SYMBOLS["box"], SYMBOLS["box_target"])
+        target_count = self._count_symbols(SYMBOLS["target"], SYMBOLS["box_target"])
+        if box_count < 1:
+            warnings.append("关卡至少需要一个箱子。")
+        if target_count < 1:
+            warnings.append("关卡至少需要一个目标点。")
+        if box_count != target_count:
+            warnings.append(
+                f"箱子数量必须与目标点数量一致。当前箱子 {box_count} 个，"
+                f"目标点 {target_count} 个。"
+            )
+
+        return warnings
+
+    @staticmethod
+    def _warning_message(warnings):
+        visible_warnings = warnings[:8]
+        message = "\n".join(f"- {warning}" for warning in visible_warnings)
+        if len(warnings) > len(visible_warnings):
+            message += f"\n- 另有 {len(warnings) - len(visible_warnings)} 个提示。"
+        return message
+
     def _level_payload(self):
         self._refresh_auto_level_number()
 
@@ -608,7 +990,12 @@ class SokobanLevelGenerator(tk.Tk):
 
         player_row, player_column = self.player_position
         player_symbol = self.grid_data[player_row][player_column]
-        if player_symbol in (SYMBOLS["wall"], SYMBOLS["outside"]):
+        if player_symbol in (
+            SYMBOLS["wall"],
+            SYMBOLS["outside"],
+            SYMBOLS["box"],
+            SYMBOLS["box_target"],
+        ):
             raise ValueError("玩家必须放在地板或目标点上。")
 
         box_count = self._count_symbols(SYMBOLS["box"], SYMBOLS["box_target"])
