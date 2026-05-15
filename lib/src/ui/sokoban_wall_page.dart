@@ -526,12 +526,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                       ),
                     ),
                     SizedBox(height: isCompactScreen ? 12 : 16),
-                    _GameControls(
-                      canUndo: _canUndo,
-                      onReset: _resetCurrentLevel,
-                      onUndo: _undoMove,
-                      onHint: _showHint,
-                    ),
+                    _HintControl(onHint: _showHint),
                     SizedBox(height: sectionGap),
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -632,54 +627,27 @@ class _BoardHeader extends StatelessWidget {
   }
 }
 
-class _GameControls extends StatelessWidget {
-  const _GameControls({
-    required this.canUndo,
-    required this.onReset,
-    required this.onUndo,
-    required this.onHint,
-  });
+class _HintControl extends StatelessWidget {
+  const _HintControl({required this.onHint});
 
-  final bool canUndo;
-  final VoidCallback onReset;
-  final VoidCallback onUndo;
   final VoidCallback onHint;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onReset,
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-            icon: const Icon(Icons.refresh),
-            label: const Text('重置'),
+    return Align(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 160, maxWidth: 240),
+        child: FilledButton.icon(
+          onPressed: onHint,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            backgroundColor: const Color(0xFFD39C13),
+            foregroundColor: Colors.white,
           ),
+          icon: const Icon(Icons.lightbulb_outline),
+          label: const Text('提示'),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: canUndo ? onUndo : null,
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-            icon: const Icon(Icons.undo),
-            label: const Text('撤销'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onHint,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 48),
-              backgroundColor: const Color(0xFFD39C13),
-              foregroundColor: Colors.white,
-            ),
-            icon: const Icon(Icons.lightbulb_outline),
-            label: const Text('提示'),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
