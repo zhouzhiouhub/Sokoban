@@ -1,0 +1,18 @@
+  SokobanLevel(
+    number: 26,
+    title: '第26关',
+    description: '把箱子推到目标点。',
+    layout: [
+      '               ',
+      '      ####     ',
+      '      # T#     ',
+      '    ### T#     ',
+      '    #  B #     ',
+      '    #   B#     ',
+      '    ##  ##     ',
+      '     ####      ',
+      '               ',
+      '               ',
+    ],
+    initialPlayerPosition: BoardPosition(row: 6, column: 7),
+  ),
