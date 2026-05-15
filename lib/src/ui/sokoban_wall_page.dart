@@ -388,12 +388,9 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     final hasBlockingIssue =
         _levelValidationMessage != null || _deadlockMessage != null;
     final hasActiveHint = _hintMessage != null;
-    final statusMessage = isLevelComplete
+    final String? statusMessage = isLevelComplete
         ? '全部箱子已到目标点，过关！'
-        : _levelValidationMessage ??
-              _deadlockMessage ??
-              _hintMessage ??
-              _currentLevel.description;
+        : _levelValidationMessage ?? _deadlockMessage ?? _hintMessage;
     final statusColor = isLevelComplete
         ? const Color(0xFFDDEFD8)
         : hasBlockingIssue
@@ -527,25 +524,27 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     ),
                     SizedBox(height: isCompactScreen ? 12 : 16),
                     _HintControl(onHint: _showHint),
-                    SizedBox(height: sectionGap),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: isCompactScreen ? 10 : 12,
+                    if (statusMessage != null) ...[
+                      SizedBox(height: sectionGap),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: isCompactScreen ? 10 : 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: statusBorderColor),
+                        ),
+                        child: Text(
+                          statusMessage,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: statusBorderColor),
-                      ),
-                      child: Text(
-                        statusMessage,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
+                    ],
                     if (isLevelComplete) ...[
                       SizedBox(height: sectionGap),
                       FilledButton.icon(
