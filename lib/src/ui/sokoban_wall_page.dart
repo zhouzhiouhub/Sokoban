@@ -32,11 +32,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   static const double _boardHeaderGap = 8;
   static const double _boardHeaderMinWidth = 220;
   static const int _hintSolverMaxVisitedStates = 8000;
-  static const List<String> _defaultStrategicHintTexts = [
-    '先观察目标区和箱子位置，优先处理最容易被墙角卡住的箱子。',
-    '每次推箱子前，先确认人物能走到箱子的反方向，给后续移动留出通道。',
-    '不要急着把箱子贴墙推进死角。继续点击提示，会给出当前局面的下一步推动作。',
-  ];
 
   int _currentLevelIndex = 0;
   late final List<LevelCatalogItem> _levelCatalog;
@@ -48,7 +43,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   int _stepCount = 0;
   String? _levelValidationMessage;
   String? _deadlockMessage;
-  int _unlockedHintCount = 0;
   String? _hintMessage;
   BoardPosition? _hintedBrickPosition;
   BoardPosition? _hintDirection;
@@ -59,14 +53,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   List<String> get _currentLayout => _currentLevel.layout;
 
   bool get _canUndo => _moveHistory.isNotEmpty;
-
-  List<String> get _currentStrategicHintTexts {
-    if (_currentLevel.hintTexts.isNotEmpty) {
-      return _currentLevel.hintTexts;
-    }
-
-    return _defaultStrategicHintTexts;
-  }
 
   double get _boardAspectRatio {
     return SokobanBoard.viewportSizeForLayout(_currentLayout).aspectRatio;
@@ -183,7 +169,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     _deadTiles = computeDeadTiles(level.layout, _targetPositions);
     _moveHistory.clear();
     _stepCount = 0;
-    _unlockedHintCount = 0;
     _clearActiveHint();
     _levelValidationMessage = _validateLoadedLevel();
     _deadlockMessage = _levelValidationMessage == null
@@ -298,18 +283,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       setState(() {
         _clearActiveHint();
         _hintMessage = _deadlockMessage;
-      });
-      return;
-    }
-
-    final strategicHintTexts = _currentStrategicHintTexts;
-    if (_unlockedHintCount < strategicHintTexts.length) {
-      final hintNumber = _unlockedHintCount + 1;
-      final hintText = strategicHintTexts[_unlockedHintCount];
-      setState(() {
-        _clearActiveHint();
-        _unlockedHintCount = hintNumber;
-        _hintMessage = '提示 $hintNumber/${strategicHintTexts.length}：$hintText';
       });
       return;
     }

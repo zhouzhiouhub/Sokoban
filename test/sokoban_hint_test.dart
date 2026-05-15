@@ -45,9 +45,7 @@ void main() {
     },
   );
 
-  testWidgets('hint button escalates from strategic hints to next push', (
-    tester,
-  ) async {
+  testWidgets('hint button shows next push immediately', (tester) async {
     final customCatalog = [
       LevelCatalogItem(
         id: 'custom_hint_level',
@@ -67,17 +65,9 @@ void main() {
     );
 
     await _tapHint(tester);
-    expect(find.textContaining('提示 1/3'), findsOneWidget);
-
-    await _tapHint(tester);
-    expect(find.textContaining('提示 2/3'), findsOneWidget);
-
-    await _tapHint(tester);
-    expect(find.textContaining('提示 3/3'), findsOneWidget);
-
-    await _tapHint(tester);
     expect(find.textContaining('下一步'), findsOneWidget);
     expect(find.textContaining('向下推一格'), findsOneWidget);
+    expect(find.textContaining('提示 1/3'), findsNothing);
   });
 }
 
