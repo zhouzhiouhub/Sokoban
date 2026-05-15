@@ -43,7 +43,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   int _stepCount = 0;
   String? _levelValidationMessage;
   String? _deadlockMessage;
-  String? _hintMessage;
   BoardPosition? _hintedBrickPosition;
   BoardPosition? _hintDirection;
   BoardPosition? _hintPushTargetPosition;
@@ -65,6 +64,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       widget.levelCatalog ?? builtInLevelCatalog,
     );
     _loadLevel(_normalisedLevelIndex(widget.initialLevelIndex));
+    _showLoadedLevelIssueDialogIfNeeded(afterBuild: true);
   }
 
   int _normalisedLevelIndex(int levelIndex) {
@@ -177,16 +177,108 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   }
 
   void _clearActiveHint() {
-    _hintMessage = null;
     _hintedBrickPosition = null;
     _hintDirection = null;
     _hintPushTargetPosition = null;
+  }
+
+  void _showLoadedLevelIssueDialogIfNeeded({bool afterBuild = false}) {
+    final issueMessage = _levelValidationMessage ?? _deadlockMessage;
+    if (issueMessage == null) {
+      return;
+    }
+
+    final title = _levelValidationMessage != null ? '关卡无效' : '死局';
+    if (afterBuild) {
+      _showStatusDialogAfterBuild(title: title, message: issueMessage);
+    } else {
+      _showStatusDialog(title: title, message: issueMessage);
+    }
+  }
+
+  void _showStatusDialogAfterBuild({
+    required String title,
+    required String message,
+    List<Widget> Function(BuildContext dialogContext)? actionsBuilder,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      _showStatusDialog(
+        title: title,
+        message: message,
+        actionsBuilder: actionsBuilder,
+      );
+    });
+  }
+
+  Future<void> _showStatusDialog({
+    required String title,
+    required String message,
+    List<Widget> Function(BuildContext dialogContext)? actionsBuilder,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions:
+              actionsBuilder?.call(dialogContext) ??
+              [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('知道了'),
+                ),
+              ],
+        );
+      },
+    );
+  }
+
+  void _showCompletionDialog() {
+    final hasNextLevel = _currentLevelIndex < _levelCatalog.length - 1;
+
+    _showStatusDialog(
+      title: '过关',
+      message: '全部箱子已到目标点，过关！',
+      actionsBuilder: (dialogContext) {
+        return [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('留在本关'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              if (hasNextLevel) {
+                _changeLevel(_currentLevelIndex + 1);
+              } else {
+                _resetCurrentLevel();
+              }
+            },
+            child: Text(hasNextLevel ? '下一关' : '重玩本关'),
+          ),
+        ];
+      },
+    );
+  }
+
+  void _showDeadlockDialog(String message) {
+    _showStatusDialog(title: '死局', message: message);
+  }
+
+  void _showHintDialog(String message) {
+    _showStatusDialog(title: '提示', message: message);
   }
 
   void _resetCurrentLevel() {
     setState(() {
       _loadLevel(_currentLevelIndex);
     });
+    _showLoadedLevelIssueDialogIfNeeded();
   }
 
   void _changeLevel(int levelIndex) {
@@ -199,6 +291,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     setState(() {
       _loadLevel(levelIndex);
     });
+    _showLoadedLevelIssueDialogIfNeeded();
   }
 
   void _undoMove() {
@@ -247,6 +340,11 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         _stepCount += 1;
         _deadlockMessage = nextDeadlockMessage;
       });
+      if (_isLevelComplete) {
+        _showCompletionDialog();
+      } else if (nextDeadlockMessage != null) {
+        _showDeadlockDialog(nextDeadlockMessage);
+      }
       return;
     }
 
@@ -266,24 +364,22 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     if (_levelValidationMessage != null) {
       setState(() {
         _clearActiveHint();
-        _hintMessage = _levelValidationMessage;
       });
+      _showStatusDialog(title: '关卡无效', message: _levelValidationMessage!);
       return;
     }
 
     if (_isLevelComplete) {
-      setState(() {
-        _clearActiveHint();
-        _hintMessage = '本关已经完成，可以进入下一关。';
-      });
+      setState(_clearActiveHint);
+      _showCompletionDialog();
       return;
     }
 
     if (_deadlockMessage != null) {
       setState(() {
         _clearActiveHint();
-        _hintMessage = _deadlockMessage;
       });
+      _showDeadlockDialog(_deadlockMessage!);
       return;
     }
 
@@ -296,27 +392,42 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       maxVisitedStates: _hintSolverMaxVisitedStates,
     );
 
+    var hintMessage = '';
+    BoardPosition? hintedBrickPosition;
+    BoardPosition? hintDirection;
+    BoardPosition? hintPushTargetPosition;
+
+    switch (searchResult.status) {
+      case SokobanHintSearchStatus.alreadySolved:
+        hintMessage = '本关已经完成，可以进入下一关。';
+        break;
+      case SokobanHintSearchStatus.found:
+        final hint = searchResult.hint!;
+        hintMessage = _formatPushHint(hint);
+        hintedBrickPosition = hint.brickPosition;
+        hintDirection = hint.direction;
+        hintPushTargetPosition = hint.nextBrickPosition;
+        break;
+      case SokobanHintSearchStatus.noSolution:
+        hintMessage = '当前局面找不到可通关路径，建议撤销几步或重置本关。';
+        break;
+      case SokobanHintSearchStatus.searchLimitReached:
+        hintMessage = '当前局面较复杂，暂时无法快速算出下一步。建议先撤销到更早状态，或重置后重新规划。';
+        break;
+    }
+
     setState(() {
       _clearActiveHint();
-      switch (searchResult.status) {
-        case SokobanHintSearchStatus.alreadySolved:
-          _hintMessage = '本关已经完成，可以进入下一关。';
-          break;
-        case SokobanHintSearchStatus.found:
-          final hint = searchResult.hint!;
-          _hintMessage = _formatPushHint(hint);
-          _hintedBrickPosition = hint.brickPosition;
-          _hintDirection = hint.direction;
-          _hintPushTargetPosition = hint.nextBrickPosition;
-          break;
-        case SokobanHintSearchStatus.noSolution:
-          _hintMessage = '当前局面找不到可通关路径，建议撤销几步或重置本关。';
-          break;
-        case SokobanHintSearchStatus.searchLimitReached:
-          _hintMessage = '当前局面较复杂，暂时无法快速算出下一步。建议先撤销到更早状态，或重置后重新规划。';
-          break;
-      }
+      _hintedBrickPosition = hintedBrickPosition;
+      _hintDirection = hintDirection;
+      _hintPushTargetPosition = hintPushTargetPosition;
     });
+
+    if (searchResult.status == SokobanHintSearchStatus.alreadySolved) {
+      _showCompletionDialog();
+    } else {
+      _showHintDialog(hintMessage);
+    }
   }
 
   String _formatPushHint(SokobanPushHint hint) {
@@ -385,26 +496,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   @override
   Widget build(BuildContext context) {
     final isLevelComplete = _isLevelComplete;
-    final hasBlockingIssue =
-        _levelValidationMessage != null || _deadlockMessage != null;
-    final hasActiveHint = _hintMessage != null;
-    final String? statusMessage = isLevelComplete
-        ? '全部箱子已到目标点，过关！'
-        : _levelValidationMessage ?? _deadlockMessage ?? _hintMessage;
-    final statusColor = isLevelComplete
-        ? const Color(0xFFDDEFD8)
-        : hasBlockingIssue
-        ? const Color(0xFFF6D7D1)
-        : hasActiveHint
-        ? const Color(0xFFFFF4C4)
-        : const Color(0xFFE9E1CF);
-    final statusBorderColor = isLevelComplete
-        ? const Color(0xFF5B8A55)
-        : hasBlockingIssue
-        ? const Color(0xFFB05D51)
-        : hasActiveHint
-        ? const Color(0xFFD39C13)
-        : const Color(0xFFC2B79D);
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactScreen = screenSize.shortestSide < 420;
     final pagePadding = isCompactScreen ? 10.0 : 16.0;
@@ -524,45 +615,6 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                     ),
                     SizedBox(height: isCompactScreen ? 12 : 16),
                     _HintControl(onHint: _showHint),
-                    if (statusMessage != null) ...[
-                      SizedBox(height: sectionGap),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: isCompactScreen ? 10 : 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: statusBorderColor),
-                        ),
-                        child: Text(
-                          statusMessage,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                    if (isLevelComplete) ...[
-                      SizedBox(height: sectionGap),
-                      FilledButton.icon(
-                        onPressed: _currentLevelIndex < _levelCatalog.length - 1
-                            ? () => _changeLevel(_currentLevelIndex + 1)
-                            : _resetCurrentLevel,
-                        icon: Icon(
-                          _currentLevelIndex < _levelCatalog.length - 1
-                              ? Icons.skip_next
-                              : Icons.replay,
-                        ),
-                        label: Text(
-                          _currentLevelIndex < _levelCatalog.length - 1
-                              ? '进入下一关'
-                              : '重玩本关',
-                        ),
-                      ),
-                    ],
                     SizedBox(height: sectionGap),
                     MovementControls(
                       onUp: () => _movePlayer(-1, 0),
