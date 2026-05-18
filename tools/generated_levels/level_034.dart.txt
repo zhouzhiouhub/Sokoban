@@ -1,0 +1,16 @@
+  SokobanLevel(
+    number: 34,
+    title: '第34关',
+    description: '把箱子推到目标点。',
+    layout: [
+      '#######',
+      '#TTBTT#',
+      '#TT#TT#',
+      '# BBB #',
+      '#  B  #',
+      '# BBB #',
+      '#  #  #',
+      '#######',
+    ],
+    initialPlayerPosition: BoardPosition(row: 6, column: 4),
+  ),

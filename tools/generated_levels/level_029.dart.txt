@@ -1,0 +1,18 @@
+  SokobanLevel(
+    number: 29,
+    title: '第29关',
+    description: '把箱子推到目标点。',
+    layout: [
+      '               ',
+      '  ######       ',
+      '  #TB  #       ',
+      '  #T#B #       ',
+      '  #TB  #       ',
+      '  #TB  #       ',
+      '  #    #       ',
+      '  ######       ',
+      '               ',
+      '               ',
+    ],
+    initialPlayerPosition: BoardPosition(row: 5, column: 5),
+  ),
