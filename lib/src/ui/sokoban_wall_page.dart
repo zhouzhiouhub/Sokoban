@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_branding.dart';
 import '../game/sokoban_rules.dart';
 import '../input/game_intents.dart';
 import '../levels/level_catalog.dart';
@@ -545,9 +546,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         backgroundColor: const Color(0xFF526652),
         foregroundColor: Colors.white,
         title: Text(
-          isLevelComplete
-              ? '推箱子 - ${_currentLevel.title} 已过关'
-              : '推箱子 - ${_currentLevel.title}',
+          appLevelTitle(_currentLevel.title, isComplete: isLevelComplete),
         ),
         actions: [
           IconButton(

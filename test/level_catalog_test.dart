@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/src/app_branding.dart';
 import 'package:app/src/levels/level_catalog.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
 import 'package:app/src/models/board_position.dart';
@@ -34,7 +35,7 @@ void main() {
       MaterialApp(home: SokobanWallPage(levelCatalog: customCatalog)),
     );
 
-    expect(find.text('推箱子 - 测试自定义关卡'), findsOneWidget);
+    expect(find.text(appLevelTitle('测试自定义关卡')), findsOneWidget);
     expect(find.text('第 99 关'), findsOneWidget);
   });
 }

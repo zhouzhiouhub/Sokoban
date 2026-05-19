@@ -1,12 +1,14 @@
-# 推箱子 Sokoban
+# 箱径
 
-这是一个用 Flutter 编写的推箱子游戏。当前工程包含可游玩的内置关卡、自定义关卡导入、本地关卡持久化、提示求解、死局检测，以及一个用于设计和导出关卡的桌面 Python/Tkinter 生成器。
+![箱径 App Logo](docs/app_logo.png)
+
+箱径是一款用 Flutter 编写的 Sokoban 推箱子解谜游戏。名称取自“箱子”和“路径”，对应玩家在墙体、箱子和目标点之间规划路线的核心玩法。当前工程包含可游玩的内置关卡、自定义关卡导入、本地关卡持久化、提示求解、死局检测，以及一个用于设计和导出关卡的桌面 Python/Tkinter 生成器。
 
 ## 当前功能
 
 ### 关卡选择
 
-- 首页为关卡选择页，标题为 `选择关卡`。
+- 首页为关卡选择页，AppBar 标题为 `箱径`。
 - 关卡按分组展示：
   - `内置关卡`：来自代码内置关卡目录。
   - `自定义关卡`：来自本地导入保存的 JSON 关卡。
@@ -18,7 +20,7 @@
 
 ### 游戏页面
 
-- 游戏页面标题显示 `推箱子 - 关卡标题`，过关后显示 `已过关`。
+- 游戏页面标题显示 `箱径 - 关卡标题`，过关后显示 `已过关`。
 - 顶部信息栏显示：
   - 当前关卡编号。
   - 当前步数。
@@ -110,6 +112,7 @@ dart analyze
 lib/
   main.dart
   src/
+    app_branding.dart
     sokoban_app.dart
     game/
       sokoban_rules.dart
@@ -139,9 +142,11 @@ lib/
       sokoban_tile.dart
       sokoban_wall_page.dart
 tools/
+  generate_app_icons.ps1
   sokoban_level_generator.py
   generated_levels/
 docs/
+  app_logo.png
   custom_level_import_design.md
 test/
 ```
@@ -149,6 +154,7 @@ test/
 ### 主要入口
 
 - `lib/main.dart`：Flutter 程序入口，启动 `SokobanApp`。
+- `lib/src/app_branding.dart`：集中定义 App 显示名称和关卡标题格式。
 - `lib/src/sokoban_app.dart`：配置 MaterialApp、主题和首页。
 - `lib/src/ui/level_selection_page.dart`：关卡选择、自定义关卡加载和导入入口。
 - `lib/src/ui/sokoban_wall_page.dart`：核心游戏页，处理移动、撤销、重置、过关、死局和提示。
@@ -339,6 +345,21 @@ App 内部和 JSON 导入支持以下布局符号：
 ```
 
 目前已实现导入和加载；删除、重命名、批量导入、导出自定义关卡还没有在 App UI 中实现。
+
+## App 品牌和图标
+
+- App 显示名称为 `箱径`。
+- Android 启动器名称来自 `android/app/src/main/res/values/strings.xml`。
+- Windows 窗口标题、产品名和可执行文件名已同步为 `箱径` / `boxtrail.exe`。
+- Logo 以深绿色迷宫底、木箱、金色目标环和路径箭头组成，不依赖文字，适合小尺寸启动器图标。
+
+重新生成图标资源：
+
+```powershell
+.\tools\generate_app_icons.ps1
+```
+
+该脚本会生成 Android 各密度 `ic_launcher.png`、Windows `app_icon.ico`，以及文档预览图 `docs/app_logo.png`。
 
 ## 关卡生成器脚本
 

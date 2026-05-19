@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_branding.dart';
 import 'levels/custom_level_store.dart';
 import 'ui/level_selection_page.dart';
 
@@ -12,7 +13,7 @@ class SokobanApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '推箱子',
+      title: appName,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF526652)),
         useMaterial3: true,

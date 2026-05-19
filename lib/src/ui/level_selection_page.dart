@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../app_branding.dart';
 import '../levels/custom_level_import_source.dart';
 import '../levels/custom_level_store.dart';
 import '../levels/level_catalog.dart';
@@ -124,7 +125,7 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF526652),
         foregroundColor: Colors.white,
-        title: const Text('选择关卡'),
+        title: const Text(appName),
         actions: [
           IconButton(
             tooltip: '导入关卡',

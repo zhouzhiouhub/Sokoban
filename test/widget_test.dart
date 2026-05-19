@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/src/app_branding.dart';
 import 'package:app/src/game/sokoban_rules.dart';
 import 'package:app/src/levels/custom_level_store.dart';
 import 'package:app/src/levels/level_catalog.dart';
@@ -129,7 +130,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(LevelSelectionPage), findsOneWidget);
-    expect(find.text('选择关卡'), findsOneWidget);
+    expect(find.text(appName), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
@@ -146,7 +147,7 @@ void main() {
 
     final level = sokobanLevels.first;
 
-    expect(find.text('推箱子 - ${level.title}'), findsOneWidget);
+    expect(find.text(appLevelTitle(level.title)), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
 
@@ -196,7 +197,7 @@ void main() {
     await tester.tap(find.byTooltip('自定义 1 - 导入测试'));
     await tester.pumpAndSettle();
 
-    expect(find.text('推箱子 - 导入测试'), findsOneWidget);
+    expect(find.text(appLevelTitle('导入测试')), findsOneWidget);
     expect(find.byType(SokobanBoard), findsOneWidget);
   });
 }
