@@ -36,6 +36,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   int _currentLevelIndex = 0;
   late final List<LevelCatalogItem> _levelCatalog;
   late BoardPosition _playerPosition;
+  BoardPosition _playerDirection = const BoardPosition(row: 1, column: 0);
   late Set<BoardPosition> _brickPositions;
   late Set<BoardPosition> _targetPositions;
   late Set<BoardPosition> _deadTiles;
@@ -54,7 +55,20 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
   bool get _canUndo => _moveHistory.isNotEmpty;
 
   double get _boardAspectRatio {
-    return SokobanBoard.viewportSizeForLayout(_currentLayout).aspectRatio;
+    return SokobanBoard.viewportSizeForLayout(
+      _currentLayout,
+      visiblePositions: _visibleBoardPositions,
+    ).aspectRatio;
+  }
+
+  Iterable<BoardPosition> get _visibleBoardPositions {
+    return <BoardPosition>{
+      _playerPosition,
+      ..._brickPositions,
+      ..._targetPositions,
+      ?_hintedBrickPosition,
+      ?_hintPushTargetPosition,
+    };
   }
 
   @override
@@ -164,6 +178,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     final level = _levelCatalog[levelIndex].level;
     _currentLevelIndex = levelIndex;
     _playerPosition = level.initialPlayerPosition;
+    _playerDirection = const BoardPosition(row: 1, column: 0);
     _brickPositions = positionsForSymbol(level.layout, 'B');
     _targetPositions = positionsForSymbol(level.layout, 'T');
     _deadTiles = computeDeadTiles(level.layout, _targetPositions);
@@ -330,11 +345,15 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       return;
     }
 
+    final moveDirection = BoardPosition(row: rowOffset, column: columnOffset);
     final snapshot = _createSnapshot();
     final nextPosition = _playerPosition.move(rowOffset, columnOffset);
     if (_isBrickAt(nextPosition)) {
       final nextBrickPosition = nextPosition.move(rowOffset, columnOffset);
       if (!_isWalkableFloor(nextBrickPosition)) {
+        setState(() {
+          _playerDirection = moveDirection;
+        });
         return;
       }
 
@@ -351,6 +370,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         _moveHistory.add(snapshot);
         _brickPositions = nextBrickPositions;
         _playerPosition = nextPosition;
+        _playerDirection = moveDirection;
         _stepCount += 1;
         _deadlockMessage = nextDeadlockMessage;
       });
@@ -363,6 +383,9 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     }
 
     if (!_isWalkableFloor(nextPosition)) {
+      setState(() {
+        _playerDirection = moveDirection;
+      });
       return;
     }
 
@@ -370,6 +393,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
       _clearActiveHint();
       _moveHistory.add(snapshot);
       _playerPosition = nextPosition;
+      _playerDirection = moveDirection;
       _stepCount += 1;
     });
   }
@@ -615,6 +639,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                     brickPositions: _brickPositions,
                                     targetPositions: _targetPositions,
                                     playerPosition: _playerPosition,
+                                    playerDirection: _playerDirection,
                                     hintedBrickPosition: _hintedBrickPosition,
                                     hintDirection: _hintDirection,
                                     hintPushTargetPosition:

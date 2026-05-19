@@ -47,13 +47,23 @@ void main() {
       final viewportSize = SokobanBoard.viewportSizeForLayout(level.layout);
       expect(
         viewportSize.rows,
-        greaterThanOrEqualTo(level.layout.length),
-        reason: '${level.displayName} must fit vertically in the board.',
+        greaterThan(0),
+        reason: '${level.displayName} must have a visible board height.',
       );
       expect(
         viewportSize.columns,
-        greaterThanOrEqualTo(expectedColumnCount),
-        reason: '${level.displayName} must fit horizontally in the board.',
+        greaterThan(0),
+        reason: '${level.displayName} must have a visible board width.',
+      );
+      expect(
+        viewportSize.rows,
+        lessThanOrEqualTo(level.layout.length),
+        reason: '${level.displayName} should hide padded rows.',
+      );
+      expect(
+        viewportSize.columns,
+        lessThanOrEqualTo(expectedColumnCount),
+        reason: '${level.displayName} should hide padded columns.',
       );
     }
   });
@@ -72,18 +82,27 @@ void main() {
     }
   });
 
-  test('board viewport size follows the layout dimensions', () {
+  test('board viewport size follows visible layout dimensions', () {
     final smallViewport = SokobanBoard.viewportSizeForLayout(
       List<String>.filled(5, '#####'),
     );
     final wideViewport = SokobanBoard.viewportSizeForLayout(
       List<String>.filled(3, '#######################'),
     );
+    final paddedViewport = SokobanBoard.viewportSizeForLayout(const [
+      '       ',
+      '  ###  ',
+      '  #T#  ',
+      '  ###  ',
+      '       ',
+    ]);
 
     expect(smallViewport.rows, 5);
     expect(smallViewport.columns, 5);
     expect(wideViewport.rows, 3);
     expect(wideViewport.columns, 23);
+    expect(paddedViewport.rows, 3);
+    expect(paddedViewport.columns, 3);
   });
 
   test('designed levels are solvable', () {
@@ -125,18 +144,16 @@ void main() {
     await tester.tap(find.text('1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('推箱子 - 第一关'), findsOneWidget);
+    final level = sokobanLevels.first;
+
+    expect(find.text('推箱子 - ${level.title}'), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
 
-    final level = sokobanLevels.first;
-    final emptyCount = _cellCount(level.layout, '_');
-    final wallCount = _cellCount(level.layout, '#');
+    final emptyCount = _visibleCellCount(level.layout, '_');
+    final wallCount = _visibleCellCount(level.layout, '#');
     final brickCount = positionsForSymbol(level.layout, 'B').length;
-    final cellCount = level.layout.fold<int>(
-      0,
-      (count, row) => count + row.length,
-    );
+    final cellCount = _visibleCellCount(level.layout);
     final floorCount = cellCount - emptyCount - wallCount - brickCount;
 
     expect(_tilesWithPrefix('empty-'), findsNWidgets(emptyCount));
@@ -145,7 +162,9 @@ void main() {
     expect(_tilesWithPrefix('floor-'), findsNWidgets(floorCount));
   });
 
-  testWidgets('renders every cell for a wide designed level', (tester) async {
+  testWidgets('renders every visible cell for a wide designed level', (
+    tester,
+  ) async {
     final levelIndex = sokobanLevels.indexWhere((level) => level.number == 19);
     final level = sokobanLevels[levelIndex];
 
@@ -154,9 +173,10 @@ void main() {
     );
 
     final viewportSize = SokobanBoard.viewportSizeForLayout(level.layout);
-    expect(viewportSize.rows, level.layout.length);
-    expect(viewportSize.columns, level.layout.first.length);
-    expect(_sokobanTileKeys(), findsNWidgets(_layoutCellCount(level.layout)));
+    final viewportRegion = SokobanBoard.viewportRegionForLayout(level.layout);
+    expect(viewportSize.rows, viewportRegion.rows);
+    expect(viewportSize.columns, viewportRegion.columns);
+    expect(_sokobanTileKeys(), findsNWidgets(_visibleCellCount(level.layout)));
   });
 
   testWidgets('imports pasted json and opens the custom level', (tester) async {
@@ -181,13 +201,6 @@ void main() {
   });
 }
 
-int _cellCount(List<String> layout, String symbol) {
-  return layout.fold<int>(
-    0,
-    (count, row) => count + symbol.allMatches(row).length,
-  );
-}
-
 Finder _tilesWithPrefix(String prefix) {
   return find.byWidgetPredicate((widget) {
     final key = widget.key;
@@ -202,8 +215,27 @@ Finder _sokobanTileKeys() {
   });
 }
 
-int _layoutCellCount(List<String> layout) {
-  return layout.fold<int>(0, (count, row) => count + row.length);
+int _visibleCellCount(List<String> layout, [String? symbol]) {
+  final region = SokobanBoard.viewportRegionForLayout(layout);
+  var count = 0;
+
+  for (var row = region.firstRow; row <= region.lastRow; row++) {
+    final line = layout[row];
+    if (region.firstColumn >= line.length) {
+      continue;
+    }
+
+    final lastColumn = region.lastColumn < line.length
+        ? region.lastColumn
+        : line.length - 1;
+    for (var column = region.firstColumn; column <= lastColumn; column++) {
+      if (symbol == null || line[column] == symbol) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
 }
 
 class _MemoryLevelStore extends CustomLevelStore {

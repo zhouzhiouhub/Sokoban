@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../game/sokoban_rules.dart';
@@ -15,38 +13,72 @@ class SokobanBoard extends StatelessWidget {
     required this.brickPositions,
     required this.targetPositions,
     required this.playerPosition,
+    this.playerDirection = const BoardPosition(row: 1, column: 0),
     this.hintedBrickPosition,
     this.hintDirection,
     this.hintPushTargetPosition,
   });
 
-  static BoardViewportSize viewportSizeForLayout(List<String> layout) {
-    return BoardViewportSize.forLayout(layout);
+  static BoardViewportSize viewportSizeForLayout(
+    List<String> layout, {
+    Iterable<BoardPosition> visiblePositions = const <BoardPosition>[],
+  }) {
+    return BoardViewportSize.forLayout(
+      layout,
+      visiblePositions: visiblePositions,
+    );
+  }
+
+  static BoardViewportRegion viewportRegionForLayout(
+    List<String> layout, {
+    Iterable<BoardPosition> visiblePositions = const <BoardPosition>[],
+  }) {
+    return BoardViewportRegion.forLayout(
+      layout,
+      visiblePositions: visiblePositions,
+    );
   }
 
   final List<String> layout;
   final Set<BoardPosition> brickPositions;
   final Set<BoardPosition> targetPositions;
   final BoardPosition playerPosition;
+  final BoardPosition playerDirection;
   final BoardPosition? hintedBrickPosition;
   final BoardPosition? hintDirection;
   final BoardPosition? hintPushTargetPosition;
 
+  Iterable<BoardPosition> get _visiblePositions {
+    return <BoardPosition>{
+      playerPosition,
+      ...brickPositions,
+      ...targetPositions,
+      ?hintedBrickPosition,
+      ?hintPushTargetPosition,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final viewportSize = viewportSizeForLayout(layout);
-    final rowOffset = ((viewportSize.rows - layout.length) / 2).floor();
-    final layoutColumnCount = layout.fold<int>(
-      0,
-      (currentMax, row) => math.max(currentMax, row.length),
+    final viewportRegion = viewportRegionForLayout(
+      layout,
+      visiblePositions: _visiblePositions,
     );
-    final columnOffset = ((viewportSize.columns - layoutColumnCount) / 2)
-        .floor();
+    final viewportSize = viewportRegion.size;
 
-    return DecoratedBox(
+    return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFE3DBC9),
-        border: Border.all(color: const Color(0xFF2E352D), width: 4),
+        color: const Color(0xFFE4DDCF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF454337), width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x24000000),
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -66,8 +98,9 @@ class SokobanBoard extends StatelessWidget {
                     Expanded(
                       child: Builder(
                         builder: (context) {
-                          final row = viewportRow - rowOffset;
-                          final column = viewportColumn - columnOffset;
+                          final row = viewportRegion.firstRow + viewportRow;
+                          final column =
+                              viewportRegion.firstColumn + viewportColumn;
                           final isLevelCell =
                               row >= 0 &&
                               row < layout.length &&
@@ -75,15 +108,13 @@ class SokobanBoard extends StatelessWidget {
                               column < layout[row].length;
 
                           if (!isLevelCell) {
-                            final isViewportBoundary =
-                                viewportRow == 0 ||
-                                viewportColumn == 0 ||
-                                viewportRow == viewportSize.rows - 1 ||
-                                viewportColumn == viewportSize.columns - 1;
-
-                            return isViewportBoundary
-                                ? const _ViewportWallCell()
-                                : const _ViewportFloorCell();
+                            return SokobanTile(
+                              tile: BoardTile.empty,
+                              isTarget: false,
+                              hasPlayer: false,
+                              visualRow: row,
+                              visualColumn: column,
+                            );
                           }
 
                           final position = BoardPosition(
@@ -110,6 +141,14 @@ class SokobanBoard extends StatelessWidget {
                             tile: tile,
                             isTarget: isTarget,
                             hasPlayer: hasPlayer,
+                            visualRow: row,
+                            visualColumn: column,
+                            wallEdges: _wallEdgesForCell(
+                              layout: layout,
+                              row: row,
+                              column: column,
+                            ),
+                            playerDirection: playerDirection,
                             isHintedBrick: isHintedBrick,
                             isHintPushTarget: isHintPushTarget,
                             hintDirection: isHintedBrick ? hintDirection : null,
@@ -126,56 +165,36 @@ class SokobanBoard extends StatelessWidget {
   }
 }
 
-class _ViewportFloorCell extends StatelessWidget {
-  const _ViewportFloorCell();
+Set<SokobanTileEdge> _wallEdgesForCell({
+  required List<String> layout,
+  required int row,
+  required int column,
+}) {
+  final edges = <SokobanTileEdge>{};
 
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        color: Color(0xFFD8CFB9),
-        border: Border.fromBorderSide(
-          BorderSide(color: Color(0xFFC9BFA8), width: 0.7),
-        ),
-      ),
-    );
+  if (_isWallAt(layout, row - 1, column)) {
+    edges.add(SokobanTileEdge.top);
   }
+  if (_isWallAt(layout, row, column + 1)) {
+    edges.add(SokobanTileEdge.right);
+  }
+  if (_isWallAt(layout, row + 1, column)) {
+    edges.add(SokobanTileEdge.bottom);
+  }
+  if (_isWallAt(layout, row, column - 1)) {
+    edges.add(SokobanTileEdge.left);
+  }
+
+  return edges;
 }
 
-class _ViewportWallCell extends StatelessWidget {
-  const _ViewportWallCell();
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '墙体',
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              color: Color(0xFF3F493A),
-              border: Border.fromBorderSide(
-                BorderSide(color: Color(0xFF222820), width: 0.7),
-              ),
-            ),
-          ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final iconSize =
-                  math.min(constraints.maxWidth, constraints.maxHeight) * 0.55;
-
-              return Center(
-                child: Icon(
-                  Icons.square,
-                  color: const Color(0xFF5F7257),
-                  size: math.min(14.0, iconSize),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
+bool _isWallAt(List<String> layout, int row, int column) {
+  if (row < 0 || row >= layout.length) {
+    return false;
   }
+  if (column < 0 || column >= layout[row].length) {
+    return false;
+  }
+
+  return tileAt(layout, row, column) == BoardTile.wall;
 }
