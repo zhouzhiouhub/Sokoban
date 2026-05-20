@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
@@ -760,16 +761,16 @@ class _HintDirectionArrow extends StatelessWidget {
 
   IconData get _icon {
     if (direction.row < 0) {
-      return Icons.arrow_upward;
+      return LucideIcons.arrowUp;
     }
     if (direction.row > 0) {
-      return Icons.arrow_downward;
+      return LucideIcons.arrowDown;
     }
     if (direction.column < 0) {
-      return Icons.arrow_back;
+      return LucideIcons.arrowLeft;
     }
 
-    return Icons.arrow_forward;
+    return LucideIcons.arrowRight;
   }
 
   @override

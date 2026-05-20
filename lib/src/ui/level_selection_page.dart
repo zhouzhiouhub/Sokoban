@@ -1,136 +1,77 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../app/router.dart';
 import '../app_branding.dart';
-import '../levels/custom_level_import_source.dart';
-import '../levels/custom_level_store.dart';
+import '../controllers/level_catalog_controller.dart';
 import '../levels/level_catalog.dart';
-import 'sokoban_wall_page.dart';
 
-class LevelSelectionPage extends StatefulWidget {
-  const LevelSelectionPage({super.key, this.customLevelStore});
+class LevelSelectionPage extends ConsumerWidget {
+  const LevelSelectionPage({super.key});
 
-  final CustomLevelStore? customLevelStore;
-
-  @override
-  State<LevelSelectionPage> createState() => _LevelSelectionPageState();
-}
-
-class _LevelSelectionPageState extends State<LevelSelectionPage> {
-  late final CustomLevelStore _customLevelStore =
-      widget.customLevelStore ?? CustomLevelStore();
-  final CustomLevelImportSourceReader _importSourceReader =
-      const CustomLevelImportSourceReader();
-  List<LevelCatalogItem> _customLevelCatalog = const [];
-  bool _isLoadingCustomLevels = true;
-  bool _isImporting = false;
-  String? _customLevelLoadError;
-
-  List<LevelCatalogItem> get _levelCatalog => [
-    ...builtInLevelCatalog,
-    ..._customLevelCatalog,
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCustomLevels();
-  }
-
-  Future<void> _loadCustomLevels() async {
-    setState(() {
-      _isLoadingCustomLevels = true;
-      _customLevelLoadError = null;
-    });
-
-    try {
-      final customLevelCatalog = await _customLevelStore.loadCatalogItems();
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _customLevelCatalog = customLevelCatalog;
-        _isLoadingCustomLevels = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isLoadingCustomLevels = false;
-        _customLevelLoadError = '自定义关卡读取失败：$error';
-      });
-    }
-  }
-
-  Future<void> _showImportDialog() async {
-    final input = await _requestImportInput(context);
+  Future<void> _showImportDialog(BuildContext context, WidgetRef ref) async {
+    final input = await showDialog<String>(
+      context: context,
+      builder: (context) => const _ImportLevelDialog(),
+    );
     if (input == null) {
       return;
     }
 
-    await _importLevel(input);
-  }
-
-  Future<void> _importLevel(String input) async {
-    setState(() {
-      _isImporting = true;
-    });
-
     try {
-      final source = await _importSourceReader.read(input);
-      final catalogItem = await _customLevelStore.importLevelJson(source);
-      if (!mounted) {
+      final catalogItem = await ref
+          .read(levelCatalogControllerProvider.notifier)
+          .importLevel(input);
+      if (!context.mounted) {
         return;
       }
 
-      setState(() {
-        _customLevelCatalog = [..._customLevelCatalog, catalogItem];
-        _customLevelLoadError = null;
-        _isImporting = false;
-      });
-      _showSnackBar('已导入：${catalogItem.level.title}');
+      _showSnackBar(context, '已导入：${catalogItem.level.title}');
     } catch (error) {
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
 
-      setState(() {
-        _isImporting = false;
-      });
-      _showSnackBar('导入失败：$error');
+      _showSnackBar(context, '导入失败：$error');
     }
   }
 
-  Future<String?> _requestImportInput(BuildContext context) async {
-    return showDialog<String>(
-      context: context,
-      builder: (context) => const _ImportLevelDialog(),
-    );
-  }
-
-  void _showSnackBar(String message) {
+  void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalogAsync = ref.watch(levelCatalogControllerProvider);
+    final catalogState = catalogAsync.hasValue
+        ? catalogAsync.requireValue
+        : null;
+    final customLevelCatalog =
+        catalogState?.customLevelCatalog ?? const <LevelCatalogItem>[];
+    final isLoadingCustomLevels =
+        catalogAsync.isLoading && !catalogAsync.hasValue;
+    final customLevelLoadError = catalogAsync.hasError
+        ? '自定义关卡读取失败：${catalogAsync.error}'
+        : null;
+    final isImporting = catalogState?.isImporting ?? false;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF2EFE7),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF526652),
-        foregroundColor: Colors.white,
         title: const Text(appName),
         actions: [
           IconButton(
             tooltip: '导入关卡',
-            onPressed: _isImporting ? null : _showImportDialog,
-            icon: const Icon(Icons.file_upload_outlined),
+            onPressed: isImporting
+                ? null
+                : () => _showImportDialog(context, ref),
+            icon: const Icon(LucideIcons.upload),
           ),
         ],
       ),
@@ -172,7 +113,6 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
                     items: builtInLevelCatalog,
                     firstCatalogIndex: 0,
                     customOffset: 0,
-                    fullCatalog: _levelCatalog,
                     gridDelegate: gridDelegate,
                   ),
                 ),
@@ -186,10 +126,9 @@ class _LevelSelectionPageState extends State<LevelSelectionPage> {
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sideInset, 12, sideInset, 24),
                   sliver: _CustomLevelSection(
-                    isLoading: _isLoadingCustomLevels,
-                    loadError: _customLevelLoadError,
-                    items: _customLevelCatalog,
-                    fullCatalog: _levelCatalog,
+                    isLoading: isLoadingCustomLevels,
+                    loadError: customLevelLoadError,
+                    items: customLevelCatalog,
                     gridDelegate: gridDelegate,
                   ),
                 ),
@@ -242,7 +181,7 @@ class _ImportLevelDialogState extends State<_ImportLevelDialog> {
         ),
         FilledButton.icon(
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          icon: const Icon(Icons.file_upload_outlined),
+          icon: const Icon(LucideIcons.upload),
           label: const Text('导入'),
         ),
       ],
@@ -255,14 +194,12 @@ class _CustomLevelSection extends StatelessWidget {
     required this.isLoading,
     required this.loadError,
     required this.items,
-    required this.fullCatalog,
     required this.gridDelegate,
   });
 
   final bool isLoading;
   final String? loadError;
   final List<LevelCatalogItem> items;
-  final List<LevelCatalogItem> fullCatalog;
   final SliverGridDelegate gridDelegate;
 
   @override
@@ -279,7 +216,7 @@ class _CustomLevelSection extends StatelessWidget {
     if (loadError != null) {
       return SliverToBoxAdapter(
         child: _InlineMessage(
-          icon: Icons.warning_amber_rounded,
+          icon: LucideIcons.triangleAlert,
           message: loadError!,
         ),
       );
@@ -288,7 +225,7 @@ class _CustomLevelSection extends StatelessWidget {
     if (items.isEmpty) {
       return const SliverToBoxAdapter(
         child: _InlineMessage(
-          icon: Icons.inventory_2_outlined,
+          icon: LucideIcons.packageOpen,
           message: '还没有自定义关卡',
         ),
       );
@@ -298,7 +235,6 @@ class _CustomLevelSection extends StatelessWidget {
       items: items,
       firstCatalogIndex: builtInLevelCatalog.length,
       customOffset: 0,
-      fullCatalog: fullCatalog,
       gridDelegate: gridDelegate,
     );
   }
@@ -309,14 +245,12 @@ class _LevelTileSliverGrid extends StatelessWidget {
     required this.items,
     required this.firstCatalogIndex,
     required this.customOffset,
-    required this.fullCatalog,
     required this.gridDelegate,
   });
 
   final List<LevelCatalogItem> items;
   final int firstCatalogIndex;
   final int customOffset;
-  final List<LevelCatalogItem> fullCatalog;
   final SliverGridDelegate gridDelegate;
 
   @override
@@ -325,19 +259,22 @@ class _LevelTileSliverGrid extends StatelessWidget {
       gridDelegate: gridDelegate,
       delegate: SliverChildBuilderDelegate((context, index) {
         return _LevelTile(
-          catalogItem: items[index],
-          displayIndex: index + customOffset + 1,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => SokobanWallPage(
-                  initialLevelIndex: firstCatalogIndex + index,
-                  levelCatalog: fullCatalog,
-                ),
-              ),
+              catalogItem: items[index],
+              displayIndex: index + customOffset + 1,
+              onTap: () {
+                context.pushNamed(
+                  AppRoute.level.name,
+                  pathParameters: {'index': '${firstCatalogIndex + index}'},
+                );
+              },
+            )
+            .animate(delay: (index % 10 * 16).ms)
+            .fadeIn(duration: 180.ms, curve: Curves.easeOutCubic)
+            .scale(
+              begin: const Offset(0.96, 0.96),
+              duration: 180.ms,
+              curve: Curves.easeOutCubic,
             );
-          },
-        );
       }, childCount: items.length),
     );
   }

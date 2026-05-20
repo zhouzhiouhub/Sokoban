@@ -2,19 +2,17 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../app_branding.dart';
-import '../game/sokoban_rules.dart';
+import '../controllers/game_controller.dart';
 import '../input/game_intents.dart';
 import '../levels/level_catalog.dart';
-import '../models/board_position.dart';
-import '../models/board_tile.dart';
-import '../models/game_snapshot.dart';
-import '../models/sokoban_level.dart';
 import 'movement_controls.dart';
 import 'sokoban_board.dart';
 
-class SokobanWallPage extends StatefulWidget {
+class SokobanWallPage extends StatelessWidget {
   const SokobanWallPage({
     super.key,
     this.initialLevelIndex = 0,
@@ -25,212 +23,56 @@ class SokobanWallPage extends StatefulWidget {
   final List<LevelCatalogItem>? levelCatalog;
 
   @override
-  State<SokobanWallPage> createState() => _SokobanWallPageState();
+  Widget build(BuildContext context) {
+    final overrides = [
+      gameInitialLevelIndexProvider.overrideWithValue(initialLevelIndex),
+      if (levelCatalog != null)
+        activeLevelCatalogProvider.overrideWithValue(
+          List<LevelCatalogItem>.unmodifiable(levelCatalog!),
+        ),
+    ];
+
+    return ProviderScope(overrides: overrides, child: const _SokobanWallView());
+  }
 }
 
-class _SokobanWallPageState extends State<SokobanWallPage> {
+class _SokobanWallView extends ConsumerStatefulWidget {
+  const _SokobanWallView();
+
+  @override
+  ConsumerState<_SokobanWallView> createState() => _SokobanWallViewState();
+}
+
+class _SokobanWallViewState extends ConsumerState<_SokobanWallView> {
   static const double _boardHeaderHeight = 48;
   static const double _boardHeaderGap = 8;
   static const double _boardHeaderMinWidth = 220;
-  static const int _hintSolverMaxVisitedStates = 8000;
-
-  int _currentLevelIndex = 0;
-  late final List<LevelCatalogItem> _levelCatalog;
-  late BoardPosition _playerPosition;
-  BoardPosition _playerDirection = const BoardPosition(row: 1, column: 0);
-  late Set<BoardPosition> _brickPositions;
-  late Set<BoardPosition> _targetPositions;
-  late Set<BoardPosition> _deadTiles;
-  final List<GameSnapshot> _moveHistory = <GameSnapshot>[];
-  int _stepCount = 0;
-  String? _levelValidationMessage;
-  String? _deadlockMessage;
-  BoardPosition? _hintedBrickPosition;
-  BoardPosition? _hintDirection;
-  BoardPosition? _hintPushTargetPosition;
-
-  SokobanLevel get _currentLevel => _levelCatalog[_currentLevelIndex].level;
-
-  List<String> get _currentLayout => _currentLevel.layout;
-
-  bool get _canUndo => _moveHistory.isNotEmpty;
-
-  double get _boardAspectRatio {
-    return SokobanBoard.viewportSizeForLayout(
-      _currentLayout,
-      visiblePositions: _visibleBoardPositions,
-    ).aspectRatio;
-  }
-
-  Iterable<BoardPosition> get _visibleBoardPositions {
-    return <BoardPosition>{
-      _playerPosition,
-      ..._brickPositions,
-      ..._targetPositions,
-      ?_hintedBrickPosition,
-      ?_hintPushTargetPosition,
-    };
-  }
 
   @override
   void initState() {
     super.initState();
-    _levelCatalog = List<LevelCatalogItem>.unmodifiable(
-      widget.levelCatalog ?? builtInLevelCatalog,
-    );
-    _loadLevel(_normalisedLevelIndex(widget.initialLevelIndex));
-    _showLoadedLevelStatusDialogIfNeeded(afterBuild: true);
-  }
-
-  int _normalisedLevelIndex(int levelIndex) {
-    if (levelIndex < 0) {
-      return 0;
-    }
-
-    if (levelIndex >= _levelCatalog.length) {
-      return _levelCatalog.length - 1;
-    }
-
-    return levelIndex;
-  }
-
-  int get _boxesOnTargetCount {
-    return _brickPositions.where(_targetPositions.contains).length;
-  }
-
-  bool get _isLevelComplete {
-    return _targetPositions.isNotEmpty &&
-        _boxesOnTargetCount == _targetPositions.length;
-  }
-
-  GameSnapshot _createSnapshot() {
-    return GameSnapshot(
-      playerPosition: _playerPosition,
-      brickPositions: _brickPositions,
-      stepCount: _stepCount,
-    );
-  }
-
-  String? _validateLoadedLevel() {
-    if (_currentLayout.isEmpty || _currentLayout.first.isEmpty) {
-      return '关卡布局不能为空。';
-    }
-
-    final expectedColumnCount = _currentLayout.first.length;
-    if (_currentLayout.any((row) => row.length != expectedColumnCount)) {
-      return '关卡布局必须是规则矩形，每一行长度都要一致。';
-    }
-
-    if (_brickPositions.isEmpty || _targetPositions.isEmpty) {
-      return '关卡至少需要一个箱子和一个目标点。';
-    }
-
-    if (_brickPositions.length != _targetPositions.length) {
-      return '箱子数量必须与目标点数量一致。';
-    }
-
-    if (!isFloorTile(_currentLayout, _playerPosition)) {
-      return '玩家初始位置必须位于可通行地块。';
-    }
-
-    if (_brickPositions.contains(_playerPosition)) {
-      return '玩家初始位置不能和箱子重叠。';
-    }
-
-    for (final brickPosition in _brickPositions) {
-      if (!_targetPositions.contains(brickPosition) &&
-          _deadTiles.contains(brickPosition)) {
-        return '当前关卡开局就有箱子落在死格，初始状态无解。';
-      }
-    }
-
-    return null;
-  }
-
-  String? _detectDeadlock({
-    required Set<BoardPosition> brickPositions,
-    BoardPosition? movedBrickPosition,
-  }) {
-    if (isSolvedState(brickPositions, _targetPositions)) {
-      return null;
-    }
-
-    for (final brickPosition in brickPositions) {
-      if (!_targetPositions.contains(brickPosition) &&
-          _deadTiles.contains(brickPosition)) {
-        return '箱子被推入死格，当前状态已无解，建议撤销或重置。';
-      }
-    }
-
-    if (movedBrickPosition != null &&
-        formsFrozenSquareDeadlock(
-          _currentLayout,
-          brickPositions,
-          _targetPositions,
-          movedBrickPosition,
-        )) {
-      return '箱子形成 2x2 锁死块，当前状态已无解，建议撤销或重置。';
-    }
-
-    return null;
-  }
-
-  void _loadLevel(int levelIndex) {
-    final level = _levelCatalog[levelIndex].level;
-    _currentLevelIndex = levelIndex;
-    _playerPosition = level.initialPlayerPosition;
-    _playerDirection = const BoardPosition(row: 1, column: 0);
-    _brickPositions = positionsForSymbol(level.layout, 'B');
-    _targetPositions = positionsForSymbol(level.layout, 'T');
-    _deadTiles = computeDeadTiles(level.layout, _targetPositions);
-    _moveHistory.clear();
-    _stepCount = 0;
-    _clearActiveHint();
-    _levelValidationMessage = _validateLoadedLevel();
-    _deadlockMessage = _levelValidationMessage == null
-        ? _detectDeadlock(brickPositions: _brickPositions)
-        : null;
-  }
-
-  void _clearActiveHint() {
-    _hintedBrickPosition = null;
-    _hintDirection = null;
-    _hintPushTargetPosition = null;
-  }
-
-  void _showLoadedLevelStatusDialogIfNeeded({bool afterBuild = false}) {
-    final issueMessage = _levelValidationMessage ?? _deadlockMessage;
-    if (issueMessage != null) {
-      final title = _levelValidationMessage != null ? '关卡无效' : '死局';
-      if (afterBuild) {
-        _showStatusDialogAfterBuild(title: title, message: issueMessage);
-      } else {
-        _showStatusDialog(title: title, message: issueMessage);
-      }
-      return;
-    }
-
-    if (_isLevelComplete) {
-      _showCompletionDialog(afterBuild: afterBuild);
-    }
-  }
-
-  void _showStatusDialogAfterBuild({
-    required String title,
-    required String message,
-    List<Widget> Function(BuildContext dialogContext)? actionsBuilder,
-  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
 
-      _showStatusDialog(
-        title: title,
-        message: message,
-        actionsBuilder: actionsBuilder,
+      _showGameMessage(
+        ref.read(gameControllerProvider.notifier).loadedLevelStatusMessage(),
       );
     });
+  }
+
+  void _showGameMessage(GameActionMessage? message) {
+    if (message == null) {
+      return;
+    }
+
+    if (message.kind == GameMessageKind.completion) {
+      _showCompletionDialog();
+      return;
+    }
+
+    _showStatusDialog(title: message.title, message: message.message);
   }
 
   Future<void> _showStatusDialog({
@@ -257,8 +99,10 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     );
   }
 
-  void _showCompletionDialog({bool afterBuild = false}) {
-    final hasNextLevel = _currentLevelIndex < _levelCatalog.length - 1;
+  void _showCompletionDialog() {
+    final gameState = ref.read(gameControllerProvider);
+    final hasNextLevel =
+        gameState.currentLevelIndex < gameState.levelCatalog.length - 1;
 
     List<Widget> buildActions(BuildContext dialogContext) {
       return [
@@ -269,24 +113,15 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
         FilledButton(
           onPressed: () {
             Navigator.of(dialogContext).pop();
-            if (hasNextLevel) {
-              _changeLevel(_currentLevelIndex + 1);
-            } else {
-              _resetCurrentLevel();
-            }
+            final controller = ref.read(gameControllerProvider.notifier);
+            final message = hasNextLevel
+                ? controller.changeLevel(gameState.currentLevelIndex + 1)
+                : controller.resetCurrentLevel();
+            _showGameMessage(message);
           },
           child: Text(hasNextLevel ? '下一关' : '重玩本关'),
         ),
       ];
-    }
-
-    if (afterBuild) {
-      _showStatusDialogAfterBuild(
-        title: '过关',
-        message: '全部箱子已到目标点，过关！',
-        actionsBuilder: buildActions,
-      );
-      return;
     }
 
     _showStatusDialog(
@@ -296,268 +131,56 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
     );
   }
 
-  void _showDeadlockDialog(String message) {
-    _showStatusDialog(title: '死局', message: message);
-  }
-
-  void _showHintDialog(String message) {
-    _showStatusDialog(title: '提示', message: message);
-  }
-
-  void _resetCurrentLevel() {
-    setState(() {
-      _loadLevel(_currentLevelIndex);
-    });
-    _showLoadedLevelStatusDialogIfNeeded();
-  }
-
-  void _changeLevel(int levelIndex) {
-    if (levelIndex < 0 ||
-        levelIndex >= _levelCatalog.length ||
-        levelIndex == _currentLevelIndex) {
-      return;
-    }
-
-    setState(() {
-      _loadLevel(levelIndex);
-    });
-    _showLoadedLevelStatusDialogIfNeeded();
+  void _movePlayer(int rowOffset, int columnOffset) {
+    final message = ref
+        .read(gameControllerProvider.notifier)
+        .movePlayer(rowOffset, columnOffset);
+    _showGameMessage(message);
   }
 
   void _undoMove() {
-    if (!_canUndo) {
-      return;
-    }
-
-    setState(() {
-      final snapshot = _moveHistory.removeLast();
-      _playerPosition = snapshot.playerPosition;
-      _brickPositions = Set<BoardPosition>.from(snapshot.brickPositions);
-      _stepCount = snapshot.stepCount;
-      _clearActiveHint();
-      _deadlockMessage = _levelValidationMessage == null
-          ? _detectDeadlock(brickPositions: _brickPositions)
-          : null;
-    });
+    ref.read(gameControllerProvider.notifier).undoMove();
   }
 
-  void _movePlayer(int rowOffset, int columnOffset) {
-    if (_levelValidationMessage != null) {
-      return;
-    }
-
-    final moveDirection = BoardPosition(row: rowOffset, column: columnOffset);
-    final snapshot = _createSnapshot();
-    final nextPosition = _playerPosition.move(rowOffset, columnOffset);
-    if (_isBrickAt(nextPosition)) {
-      final nextBrickPosition = nextPosition.move(rowOffset, columnOffset);
-      if (!_isWalkableFloor(nextBrickPosition)) {
-        setState(() {
-          _playerDirection = moveDirection;
-        });
-        return;
-      }
-
-      final nextBrickPositions = Set<BoardPosition>.from(_brickPositions)
-        ..remove(nextPosition)
-        ..add(nextBrickPosition);
-      final nextDeadlockMessage = _detectDeadlock(
-        brickPositions: nextBrickPositions,
-        movedBrickPosition: nextBrickPosition,
-      );
-
-      setState(() {
-        _clearActiveHint();
-        _moveHistory.add(snapshot);
-        _brickPositions = nextBrickPositions;
-        _playerPosition = nextPosition;
-        _playerDirection = moveDirection;
-        _stepCount += 1;
-        _deadlockMessage = nextDeadlockMessage;
-      });
-      if (_isLevelComplete) {
-        _showCompletionDialog();
-      } else if (nextDeadlockMessage != null) {
-        _showDeadlockDialog(nextDeadlockMessage);
-      }
-      return;
-    }
-
-    if (!_isWalkableFloor(nextPosition)) {
-      setState(() {
-        _playerDirection = moveDirection;
-      });
-      return;
-    }
-
-    setState(() {
-      _clearActiveHint();
-      _moveHistory.add(snapshot);
-      _playerPosition = nextPosition;
-      _playerDirection = moveDirection;
-      _stepCount += 1;
-    });
+  void _resetCurrentLevel() {
+    final message = ref
+        .read(gameControllerProvider.notifier)
+        .resetCurrentLevel();
+    _showGameMessage(message);
   }
 
   void _showHint() {
-    if (_levelValidationMessage != null) {
-      setState(() {
-        _clearActiveHint();
-      });
-      _showStatusDialog(title: '关卡无效', message: _levelValidationMessage!);
-      return;
-    }
-
-    if (_isLevelComplete) {
-      setState(_clearActiveHint);
-      _showCompletionDialog();
-      return;
-    }
-
-    if (_deadlockMessage != null) {
-      setState(() {
-        _clearActiveHint();
-      });
-      _showDeadlockDialog(_deadlockMessage!);
-      return;
-    }
-
-    final searchResult = findNextSokobanPushHint(
-      layout: _currentLayout,
-      playerPosition: _playerPosition,
-      brickPositions: _brickPositions,
-      targetPositions: _targetPositions,
-      deadTiles: _deadTiles,
-      maxVisitedStates: _hintSolverMaxVisitedStates,
-    );
-
-    var hintMessage = '';
-    BoardPosition? hintedBrickPosition;
-    BoardPosition? hintDirection;
-    BoardPosition? hintPushTargetPosition;
-
-    switch (searchResult.status) {
-      case SokobanHintSearchStatus.alreadySolved:
-        hintMessage = '本关已经完成，可以进入下一关。';
-        break;
-      case SokobanHintSearchStatus.found:
-        final hint = searchResult.hint!;
-        hintMessage = _formatPushHint(hint);
-        hintedBrickPosition = hint.brickPosition;
-        hintDirection = hint.direction;
-        hintPushTargetPosition = hint.nextBrickPosition;
-        break;
-      case SokobanHintSearchStatus.noSolution:
-        hintMessage = '当前局面找不到可通关路径，建议撤销几步或重置本关。';
-        break;
-      case SokobanHintSearchStatus.searchLimitReached:
-        hintMessage = '当前局面较复杂，暂时无法快速算出下一步。建议先撤销到更早状态，或重置后重新规划。';
-        break;
-    }
-
-    setState(() {
-      _clearActiveHint();
-      _hintedBrickPosition = hintedBrickPosition;
-      _hintDirection = hintDirection;
-      _hintPushTargetPosition = hintPushTargetPosition;
-    });
-
-    if (searchResult.status == SokobanHintSearchStatus.alreadySolved) {
-      _showCompletionDialog();
-    } else {
-      _showHintDialog(hintMessage);
-    }
-  }
-
-  String _formatPushHint(SokobanPushHint hint) {
-    final pushSide = _pushSideText(hint.direction);
-    final direction = _directionText(hint.direction);
-    final playerPushPosition = _formatBoardPosition(hint.playerPushPosition);
-    final brickPosition = _formatBoardPosition(hint.brickPosition);
-
-    return '下一步：站到 $playerPushPosition，也就是箱子$pushSide，把 $brickPosition 的箱子向$direction推一格。';
-  }
-
-  String _formatBoardPosition(BoardPosition position) {
-    return '第 ${position.row + 1} 行第 ${position.column + 1} 列';
-  }
-
-  String _directionText(BoardPosition direction) {
-    if (direction.row < 0) {
-      return '上';
-    }
-    if (direction.row > 0) {
-      return '下';
-    }
-    if (direction.column < 0) {
-      return '左';
-    }
-
-    return '右';
-  }
-
-  String _pushSideText(BoardPosition direction) {
-    if (direction.row < 0) {
-      return '下方';
-    }
-    if (direction.row > 0) {
-      return '上方';
-    }
-    if (direction.column < 0) {
-      return '右侧';
-    }
-
-    return '左侧';
-  }
-
-  bool _isWalkableFloor(BoardPosition position) {
-    if (!_isInsideBoard(position)) {
-      return false;
-    }
-
-    final nextTile = tileAt(_currentLayout, position.row, position.column);
-    return nextTile == BoardTile.floor && !_isBrickAt(position);
-  }
-
-  bool _isInsideBoard(BoardPosition position) {
-    if (position.row < 0 || position.row >= _currentLayout.length) {
-      return false;
-    }
-
-    return position.column >= 0 &&
-        position.column < _currentLayout[position.row].length;
-  }
-
-  bool _isBrickAt(BoardPosition position) {
-    return _brickPositions.contains(position);
+    final message = ref.read(gameControllerProvider.notifier).showHint();
+    _showGameMessage(message);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLevelComplete = _isLevelComplete;
+    final gameState = ref.watch(gameControllerProvider);
+    final isLevelComplete = gameState.isLevelComplete;
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactScreen = screenSize.shortestSide < 420;
     final pagePadding = isCompactScreen ? 10.0 : 16.0;
     final sectionGap = isCompactScreen ? 10.0 : 12.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2EFE7),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF526652),
-        foregroundColor: Colors.white,
         title: Text(
-          appLevelTitle(_currentLevel.title, isComplete: isLevelComplete),
+          appLevelTitle(
+            gameState.currentLevel.title,
+            isComplete: isLevelComplete,
+          ),
         ),
         actions: [
           IconButton(
             tooltip: '撤销一步',
-            onPressed: _canUndo ? _undoMove : null,
-            icon: const Icon(Icons.undo),
+            onPressed: gameState.canUndo ? _undoMove : null,
+            icon: const Icon(LucideIcons.undo2),
           ),
           IconButton(
             tooltip: '重置本关',
             onPressed: _resetCurrentLevel,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(LucideIcons.refreshCw),
           ),
         ],
       ),
@@ -606,7 +229,7 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                 _boardHeaderHeight -
                                 _boardHeaderGap,
                           );
-                          final boardAspectRatio = _boardAspectRatio;
+                          final boardAspectRatio = gameState.boardAspectRatio;
                           final double boardWidth = math.min(
                             constraints.maxWidth,
                             availableBoardHeight * boardAspectRatio,
@@ -625,8 +248,8 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                 SizedBox(
                                   width: boardHeaderWidth,
                                   child: _BoardHeader(
-                                    levelNumber: _currentLevel.number,
-                                    stepCount: _stepCount,
+                                    levelNumber: gameState.currentLevel.number,
+                                    stepCount: gameState.stepCount,
                                   ),
                                 ),
                                 const SizedBox(height: _boardHeaderGap),
@@ -634,15 +257,16 @@ class _SokobanWallPageState extends State<SokobanWallPage> {
                                   width: boardWidth,
                                   height: boardHeight,
                                   child: SokobanBoard(
-                                    layout: _currentLayout,
-                                    brickPositions: _brickPositions,
-                                    targetPositions: _targetPositions,
-                                    playerPosition: _playerPosition,
-                                    playerDirection: _playerDirection,
-                                    hintedBrickPosition: _hintedBrickPosition,
-                                    hintDirection: _hintDirection,
+                                    layout: gameState.currentLayout,
+                                    brickPositions: gameState.brickPositions,
+                                    targetPositions: gameState.targetPositions,
+                                    playerPosition: gameState.playerPosition,
+                                    playerDirection: gameState.playerDirection,
+                                    hintedBrickPosition:
+                                        gameState.hintedBrickPosition,
+                                    hintDirection: gameState.hintDirection,
                                     hintPushTargetPosition:
-                                        _hintPushTargetPosition,
+                                        gameState.hintPushTargetPosition,
                                   ),
                                 ),
                               ],
@@ -733,7 +357,7 @@ class _HintControl extends StatelessWidget {
             backgroundColor: const Color(0xFFD39C13),
             foregroundColor: Colors.white,
           ),
-          icon: const Icon(Icons.lightbulb_outline),
+          icon: const Icon(LucideIcons.lightbulb),
           label: const Text('提示'),
         ),
       ),

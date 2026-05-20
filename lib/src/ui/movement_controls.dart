@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class MovementControls extends StatelessWidget {
   const MovementControls({
@@ -36,7 +37,7 @@ class MovementControls extends StatelessWidget {
       children: [
         buildButton(
           onPressed: onUp,
-          icon: Icons.keyboard_arrow_up,
+          icon: LucideIcons.chevronUp,
           tooltip: '向上移动',
         ),
         const SizedBox(height: 8),
@@ -45,7 +46,7 @@ class MovementControls extends StatelessWidget {
           children: [
             buildButton(
               onPressed: onLeft,
-              icon: Icons.keyboard_arrow_left,
+              icon: LucideIcons.chevronLeft,
               tooltip: '向左移动',
             ),
             const SizedBox(width: 8),
@@ -57,13 +58,13 @@ class MovementControls extends StatelessWidget {
                   color: Color(0xFFDDD3BE),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.person, color: Color(0xFF526652)),
+                child: Icon(LucideIcons.user, color: Color(0xFF526652)),
               ),
             ),
             const SizedBox(width: 8),
             buildButton(
               onPressed: onRight,
-              icon: Icons.keyboard_arrow_right,
+              icon: LucideIcons.chevronRight,
               tooltip: '向右移动',
             ),
           ],
@@ -71,7 +72,7 @@ class MovementControls extends StatelessWidget {
         const SizedBox(height: 8),
         buildButton(
           onPressed: onDown,
-          icon: Icons.keyboard_arrow_down,
+          icon: LucideIcons.chevronDown,
           tooltip: '向下移动',
         ),
       ],

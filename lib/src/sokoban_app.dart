@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_branding.dart';
+import 'app/router.dart';
+import 'app/theme.dart';
+import 'controllers/level_catalog_controller.dart';
 import 'levels/custom_level_store.dart';
-import 'ui/level_selection_page.dart';
 
 class SokobanApp extends StatelessWidget {
   const SokobanApp({super.key, this.customLevelStore});
@@ -11,14 +14,28 @@ class SokobanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ProviderScope(
+      overrides: [
+        if (customLevelStore != null)
+          customLevelStoreProvider.overrideWithValue(customLevelStore!),
+      ],
+      child: const _SokobanMaterialApp(),
+    );
+  }
+}
+
+class _SokobanMaterialApp extends ConsumerWidget {
+  const _SokobanMaterialApp();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: appName,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF526652)),
-        useMaterial3: true,
-      ),
-      home: LevelSelectionPage(customLevelStore: customLevelStore),
+      theme: buildSokobanTheme(),
+      routerConfig: router,
     );
   }
 }
