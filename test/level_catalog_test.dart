@@ -38,4 +38,23 @@ void main() {
     expect(find.text(appLevelTitle('测试自定义关卡')), findsOneWidget);
     expect(find.text('第 99 关'), findsOneWidget);
   });
+
+  testWidgets('SokobanWallPage reloads when the initial level changes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: SokobanWallPage(initialLevelIndex: 0)),
+    );
+    expect(find.text(appLevelTitle(sokobanLevels[0].title)), findsOneWidget);
+    expect(find.text('第 1 关'), findsOneWidget);
+
+    await tester.pumpWidget(
+      const MaterialApp(home: SokobanWallPage(initialLevelIndex: 1)),
+    );
+    await tester.pump();
+
+    expect(find.text(appLevelTitle(sokobanLevels[1].title)), findsOneWidget);
+    expect(find.text('第 2 关'), findsOneWidget);
+    expect(find.text('第 1 关'), findsNothing);
+  });
 }

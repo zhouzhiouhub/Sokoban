@@ -24,6 +24,10 @@ class SokobanWallPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scopeKey = ValueKey<String>(
+      'sokoban-wall-$initialLevelIndex-'
+      '${levelCatalog?.map((item) => item.id).join('|') ?? 'active-catalog'}',
+    );
     final overrides = [
       gameInitialLevelIndexProvider.overrideWithValue(initialLevelIndex),
       if (levelCatalog != null)
@@ -32,7 +36,11 @@ class SokobanWallPage extends StatelessWidget {
         ),
     ];
 
-    return ProviderScope(overrides: overrides, child: const _SokobanWallView());
+    return ProviderScope(
+      key: scopeKey,
+      overrides: overrides,
+      child: const _SokobanWallView(),
+    );
   }
 }
 

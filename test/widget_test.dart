@@ -142,12 +142,13 @@ void main() {
     await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
     await tester.pump();
 
-    await tester.tap(find.text('1'));
+    await tester.tap(find.byTooltip('第 2 关 - 第2关'));
     await tester.pumpAndSettle();
 
-    final level = sokobanLevels.first;
+    final level = sokobanLevels[1];
 
     expect(find.text(appLevelTitle(level.title)), findsOneWidget);
+    expect(find.text('第 2 关'), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
 

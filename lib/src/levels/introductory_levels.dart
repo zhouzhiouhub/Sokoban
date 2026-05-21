@@ -1,9 +1,8 @@
 import '../models/board_position.dart';
 import '../models/sokoban_level.dart';
-import 'level_copy.dart';
 
 final List<SokobanLevel> introductoryLevels = [
-   SokobanLevel(
+  SokobanLevel(
     number: 1,
     title: '第1关',
     description: '把箱子推到目标点。',
@@ -22,7 +21,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 7),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 2,
     title: '第2关',
     description: '把箱子推到目标点。',
@@ -41,8 +40,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 4),
   ),
 
-
-   SokobanLevel(
+  SokobanLevel(
     number: 3,
     title: '第3关',
     description: '把箱子推到目标点。',
@@ -65,7 +63,7 @@ final List<SokobanLevel> introductoryLevels = [
     number: 4,
     title: '第4关',
     description: '把箱子推到目标点。',
-     layout: [
+    layout: [
       '  #####        ',
       '  #   # ###    ',
       '  # BB# #T#    ',
@@ -151,7 +149,7 @@ final List<SokobanLevel> introductoryLevels = [
     ],
     initialPlayerPosition: BoardPosition(row: 2, column: 5),
   ),
-    SokobanLevel(
+  SokobanLevel(
     number: 9,
     title: '第9关',
     description: '把箱子推到目标点。',
@@ -169,7 +167,7 @@ final List<SokobanLevel> introductoryLevels = [
     ],
     initialPlayerPosition: BoardPosition(row: 4, column: 9),
   ),
-   SokobanLevel(
+  SokobanLevel(
     number: 10,
     title: '第10关',
     description: '把箱子推到目标点。',
@@ -188,7 +186,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 2, column: 10),
   ),
 
-    SokobanLevel(
+  SokobanLevel(
     number: 11,
     title: '第11关',
     description: '把箱子推到目标点。',
@@ -207,7 +205,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 6, column: 6),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 12,
     title: '第12关',
     description: '把箱子推到目标点。',
@@ -226,7 +224,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 6, column: 7),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 13,
     title: '第13关',
     description: '把箱子推到目标点。',
@@ -245,7 +243,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 2, column: 6),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 14,
     title: '第14关',
     description: '把箱子推到目标点。',
@@ -321,7 +319,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 9),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 18,
     title: '第18关',
     description: '把箱子推到目标点。',
@@ -340,7 +338,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 7, column: 9),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 19,
     title: '第19关',
     description: '把箱子推到目标点。',
@@ -380,7 +378,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 2, column: 5),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 21,
     title: '第21关',
     description: '把箱子推到目标点。',
@@ -402,7 +400,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 7, column: 8),
   ),
 
-   SokobanLevel(  
+  SokobanLevel(
     number: 22,
     title: '第22关',
     description: '把箱子推到目标点。',
@@ -421,7 +419,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 6, column: 7),
   ),
 
-    SokobanLevel(
+  SokobanLevel(
     number: 23,
     title: '第23关',
     description: '把箱子推到目标点。',
@@ -440,7 +438,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 8),
   ),
 
-    SokobanLevel(
+  SokobanLevel(
     number: 24,
     title: '第24关',
     description: '把箱子推到目标点。',
@@ -459,7 +457,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 3, column: 9),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 25,
     title: '第25关',
     description: '把箱子推到目标点。',
@@ -516,7 +514,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 4),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 28,
     title: '第28关',
     description: '把箱子推到目标点。',
@@ -535,7 +533,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 6, column: 3),
   ),
 
-    SokobanLevel(
+  SokobanLevel(
     number: 29,
     title: '第29关',
     description: '把箱子推到目标点。',
@@ -553,7 +551,7 @@ final List<SokobanLevel> introductoryLevels = [
     ],
     initialPlayerPosition: BoardPosition(row: 5, column: 5),
   ),
-    SokobanLevel(
+  SokobanLevel(
     number: 30,
     title: '第30关',
     description: '把箱子推到目标点。',
@@ -576,20 +574,19 @@ final List<SokobanLevel> introductoryLevels = [
     title: '第31关',
     description: '把箱子推到目标点。',
     layout: [
-      '               ',
-      '    #####      ',
-      '    #   #      ',
-      '  ### * ###    ',
-      '  #  TTT  #    ',
-      '  # ##B## #    ',
-      '  # B   B #    ',
-      '  ###   ###    ',
-      '    #   #      ',
-      '    #####      ',
+      '____________',
+      '__########__',
+      '__#      #__',
+      '__# B T  #__',
+      '__#  ##  #__',
+      '__# B T  #__',
+      '__#      #__',
+      '__########__',
+      '____________',
     ],
-    initialPlayerPosition: BoardPosition(row: 2, column: 6),
+    initialPlayerPosition: BoardPosition(row: 6, column: 3),
   ),
-   SokobanLevel(
+  SokobanLevel(
     number: 32,
     title: '第32关',
     description: '把箱子推到目标点。',
@@ -625,7 +622,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 4, column: 4),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 34,
     title: '第34关',
     description: '把箱子推到目标点。',
@@ -660,7 +657,7 @@ final List<SokobanLevel> introductoryLevels = [
     initialPlayerPosition: BoardPosition(row: 1, column: 2),
   ),
 
-   SokobanLevel(
+  SokobanLevel(
     number: 36,
     title: '第36关',
     description: '把箱子推到目标点。',
@@ -680,74 +677,71 @@ final List<SokobanLevel> introductoryLevels = [
 
   SokobanLevel(
     number: 37,
-    title: levelCopy[2].title,
-    description: levelCopy[2].description,
+    title: '第37关',
+    description: '先把上方两只箱子压进下方目标区。',
     layout: [
-      '_______________',
-      '____### ###____',
-      '____#T #  #____',
-      '____#  B  #____',
-      '____#T    #____',
-      '____#   B #____',
-      '____#     #____',
-      '____#######____',
-      '_______________',
-      '_______________',
+      '___________',
+      '__#######__',
+      '__#     #__',
+      '__# BB  #__',
+      '__#     #__',
+      '__# TT  #__',
+      '__#     #__',
+      '__#######__',
+      '___________',
     ],
-    initialPlayerPosition: BoardPosition(row: 4, column: 7),
+    initialPlayerPosition: BoardPosition(row: 6, column: 3),
   ),
   SokobanLevel(
     number: 38,
-    title: levelCopy[2].title,
-    description: levelCopy[2].description,
+    title: '第38关',
+    description: '利用左侧通道，把两只箱子逐步推到右侧目标点。',
     layout: [
-      '_______________',
-      '____### ###____',
-      '____#T #  #____',
-      '____#  B  #____',
-      '____#T    #____',
-      '____#   B #____',
-      '____#     #____',
-      '____#######____',
-      '_______________',
-      '_______________',
+      '____________',
+      '__########__',
+      '__#      #__',
+      '__# B  T #__',
+      '__# B  T #__',
+      '__#      #__',
+      '__########__',
+      '____________',
     ],
-    initialPlayerPosition: BoardPosition(row: 4, column: 7),
+    initialPlayerPosition: BoardPosition(row: 5, column: 3),
   ),
   SokobanLevel(
     number: 39,
-    title: levelCopy[2].title,
-    description: levelCopy[2].description,
+    title: '第39关',
+    description: '按错列顺序下压三只箱子，避免互相卡住。',
     layout: [
-      '_______________',
-      '____### ###____',
-      '____#T #  #____',
-      '____#  B  #____',
-      '____#T    #____',
-      '____#   B #____',
-      '____#     #____',
-      '____#######____',
-      '_______________',
-      '_______________',
+      '____________',
+      '__########__',
+      '__#      #__',
+      '__# B B  #__',
+      '__#  B   #__',
+      '__# T T  #__',
+      '__#  T   #__',
+      '__#      #__',
+      '__########__',
+      '____________',
     ],
-    initialPlayerPosition: BoardPosition(row: 4, column: 7),
+    initialPlayerPosition: BoardPosition(row: 7, column: 3),
   ),
   SokobanLevel(
     number: 40,
-    title: levelCopy[2].title,
-    description: levelCopy[2].description,
+    title: '第40关',
+    description: '四只箱子分成两列推进，先处理中间错位箱。',
     layout: [
-      '_______________',
-      '____### ###____',
-      '____#T #  #____',
-      '____#  B  #____',
-      '____#T    #____',
-      '____#   B #____',
-      '____#     #____',
-      '____#######____',
-      '_______________',
-      '_______________',
+      '_____________',
+      '__#########__',
+      '__#       #__',
+      '__# B B   #__',
+      '__#  B B  #__',
+      '__# T T   #__',
+      '__#  T T  #__',
+      '__#       #__',
+      '__#########__',
+      '_____________',
     ],
-    initialPlayerPosition: BoardPosition(row: 4, column: 7),
+    initialPlayerPosition: BoardPosition(row: 7, column: 3),
   ),
 ];
