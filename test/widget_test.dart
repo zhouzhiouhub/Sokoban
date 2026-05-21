@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -164,6 +165,26 @@ void main() {
     expect(_tilesWithPrefix('floor-'), findsNWidgets(floorCount));
   });
 
+  testWidgets(
+    'opens the selected level while custom levels are still loading',
+    (tester) async {
+      await tester.pumpWidget(
+        SokobanApp(customLevelStore: _PendingLevelStore()),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('第 2 关 - 第2关'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final level = sokobanLevels[1];
+
+      expect(find.text(appLevelTitle(level.title)), findsOneWidget);
+      expect(find.text('第 2 关'), findsOneWidget);
+      expect(find.text('第 1 关'), findsNothing);
+    },
+  );
+
   testWidgets('renders every visible cell for a wide designed level', (
     tester,
   ) async {
@@ -260,6 +281,17 @@ class _MemoryLevelStore extends CustomLevelStore {
     );
     _items.add(item);
     return item;
+  }
+}
+
+class _PendingLevelStore extends CustomLevelStore {
+  _PendingLevelStore() : super(storageFile: File('unused_custom_levels.json'));
+
+  final Completer<List<LevelCatalogItem>> _loadCompleter = Completer();
+
+  @override
+  Future<List<LevelCatalogItem>> loadCatalogItems() {
+    return _loadCompleter.future;
   }
 }
 

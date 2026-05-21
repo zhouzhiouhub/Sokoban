@@ -23,6 +23,7 @@ final gameInitialLevelIndexProvider = Provider<int>((ref) => 0);
 final gameControllerProvider =
     NotifierProvider.autoDispose<GameController, SokobanGameState>(
       GameController.new,
+      dependencies: [activeLevelCatalogProvider, gameInitialLevelIndexProvider],
     );
 
 enum GameMessageKind { status, deadlock, hint, completion }
