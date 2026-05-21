@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../game/sokoban_rules.dart';
 import '../levels/level_catalog.dart';
+import '../levels/sokoban_standard_solutions.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
 import '../models/board_viewport_size.dart';
@@ -133,6 +134,8 @@ class SokobanGameState {
 
   SokobanLevel get currentLevel => levelCatalog[currentLevelIndex].level;
 
+  LevelCatalogItem get currentCatalogItem => levelCatalog[currentLevelIndex];
+
   List<String> get currentLayout => currentLevel.layout;
 
   bool get canUndo => moveHistory.isNotEmpty;
@@ -227,8 +230,14 @@ class SokobanGameState {
 class GameController extends Notifier<SokobanGameState> {
   static const int _hintSolverMaxVisitedStates = 8000;
 
+  final Map<String, SokobanHintPathIndex> _standardHintPathIndexes =
+      <String, SokobanHintPathIndex>{};
+  SokobanHintPathIndex? _runtimeHintPathIndex;
+  String? _runtimeHintPathLevelId;
+
   @override
   SokobanGameState build() {
+    _clearRuntimeHintPathCache();
     final levelCatalog = ref.watch(activeLevelCatalogProvider);
     final initialLevelIndex = ref.watch(gameInitialLevelIndexProvider);
 
@@ -243,6 +252,7 @@ class GameController extends Notifier<SokobanGameState> {
   }
 
   GameActionMessage? resetCurrentLevel() {
+    _clearRuntimeHintPathCache();
     state = SokobanGameState.load(
       levelCatalog: state.levelCatalog,
       levelIndex: state.currentLevelIndex,
@@ -257,6 +267,7 @@ class GameController extends Notifier<SokobanGameState> {
       return null;
     }
 
+    _clearRuntimeHintPathCache();
     state = SokobanGameState.load(
       levelCatalog: state.levelCatalog,
       levelIndex: levelIndex,
@@ -377,6 +388,16 @@ class GameController extends Notifier<SokobanGameState> {
       return GameActionMessage.deadlock(currentState.deadlockMessage!);
     }
 
+    final standardHint = _standardHintForState(currentState);
+    if (standardHint != null) {
+      return _showPushHint(currentState, standardHint);
+    }
+
+    final cachedHint = _runtimeHintForState(currentState);
+    if (cachedHint != null) {
+      return _showPushHint(currentState, cachedHint);
+    }
+
     final searchResult = findNextSokobanPushHint(
       layout: currentState.currentLayout,
       playerPosition: currentState.playerPosition,
@@ -386,34 +407,111 @@ class GameController extends Notifier<SokobanGameState> {
       maxVisitedStates: _hintSolverMaxVisitedStates,
     );
 
-    String hintMessage;
-    BoardPosition? hintedBrickPosition;
-    BoardPosition? hintDirection;
-    BoardPosition? hintPushTargetPosition;
-
     switch (searchResult.status) {
       case SokobanHintSearchStatus.alreadySolved:
+        _clearRuntimeHintPathCache();
         state = currentState.clearActiveHint();
         return const GameActionMessage.completion();
       case SokobanHintSearchStatus.found:
-        final hint = searchResult.hint!;
-        hintMessage = _formatPushHint(hint);
-        hintedBrickPosition = hint.brickPosition;
-        hintDirection = hint.direction;
-        hintPushTargetPosition = hint.nextBrickPosition;
-        break;
+        _cacheRuntimeHintPath(currentState, searchResult.solution);
+        return _showPushHint(currentState, searchResult.hint!);
       case SokobanHintSearchStatus.noSolution:
-        hintMessage = '当前局面找不到可通关路径，建议撤销几步或重置本关。';
-        break;
+        state = currentState.clearActiveHint();
+        return const GameActionMessage.hint('当前局面已确认无可通关路径，建议撤销几步或重置本关。');
       case SokobanHintSearchStatus.searchLimitReached:
-        hintMessage = '当前局面较复杂，暂时无法快速算出下一步。建议先撤销到更早状态，或重置后重新规划。';
-        break;
+        state = currentState.clearActiveHint();
+        return const GameActionMessage.hint('这个局面较复杂，暂时无法确认下一步');
+    }
+  }
+
+  SokobanPushHint? _standardHintForState(SokobanGameState currentState) {
+    if (currentState.currentCatalogItem.source != LevelSource.builtIn) {
+      return null;
     }
 
+    final solution = builtInSokobanStandardSolution(
+      currentState.currentLevel.number,
+    );
+    if (solution.isEmpty) {
+      return null;
+    }
+
+    final index = _standardHintPathIndexes.putIfAbsent(
+      currentState.currentCatalogItem.id,
+      () => SokobanHintPathIndex.fromSolution(
+        layout: currentState.currentLayout,
+        initialPlayerPosition: currentState.currentLevel.initialPlayerPosition,
+        initialBrickPositions: positionsForSymbol(
+          currentState.currentLayout,
+          'B',
+        ),
+        solution: solution,
+      ),
+    );
+    if (index.isEmpty) {
+      return null;
+    }
+
+    return index.hintForState(
+      layout: currentState.currentLayout,
+      playerPosition: currentState.playerPosition,
+      brickPositions: currentState.brickPositions,
+    );
+  }
+
+  SokobanPushHint? _runtimeHintForState(SokobanGameState currentState) {
+    final pathIndex = _runtimeHintPathIndex;
+    if (pathIndex == null ||
+        _runtimeHintPathLevelId != currentState.currentCatalogItem.id) {
+      return null;
+    }
+
+    return pathIndex.hintForState(
+      layout: currentState.currentLayout,
+      playerPosition: currentState.playerPosition,
+      brickPositions: currentState.brickPositions,
+    );
+  }
+
+  void _cacheRuntimeHintPath(
+    SokobanGameState currentState,
+    List<SokobanPushHint> solution,
+  ) {
+    if (solution.isEmpty) {
+      _clearRuntimeHintPathCache();
+      return;
+    }
+
+    final pathIndex = SokobanHintPathIndex.fromSolution(
+      layout: currentState.currentLayout,
+      initialPlayerPosition: currentState.playerPosition,
+      initialBrickPositions: currentState.brickPositions,
+      solution: solution,
+    );
+    if (pathIndex.isEmpty) {
+      _clearRuntimeHintPathCache();
+      return;
+    }
+
+    _runtimeHintPathLevelId = currentState.currentCatalogItem.id;
+    _runtimeHintPathIndex = pathIndex;
+  }
+
+  void _clearRuntimeHintPathCache() {
+    _runtimeHintPathLevelId = null;
+    _runtimeHintPathIndex = null;
+  }
+
+  GameActionMessage _showPushHint(
+    SokobanGameState currentState,
+    SokobanPushHint hint,
+  ) {
+    final hintMessage = _formatPushHint(hint);
+
     state = currentState.copyWith(
-      hintedBrickPosition: hintedBrickPosition,
-      hintDirection: hintDirection,
-      hintPushTargetPosition: hintPushTargetPosition,
+      hintedBrickPosition: hint.brickPosition,
+      hintDirection: hint.direction,
+      hintPushTargetPosition: hint.nextBrickPosition,
     );
 
     return GameActionMessage.hint(hintMessage);
@@ -494,19 +592,38 @@ String? _detectDeadlock(
 
   for (final brickPosition in brickPositions) {
     if (!state.targetPositions.contains(brickPosition) &&
-        state.deadTiles.contains(brickPosition)) {
+        (state.deadTiles.contains(brickPosition) ||
+            isNonTargetCornerDeadlock(
+              state.currentLayout,
+              state.targetPositions,
+              brickPosition,
+            ))) {
       return '箱子被推入死格，当前状态已无解，建议撤销或重置。';
     }
   }
 
-  if (movedBrickPosition != null &&
-      formsFrozenSquareDeadlock(
-        state.currentLayout,
-        brickPositions,
-        state.targetPositions,
-        movedBrickPosition,
-      )) {
-    return '箱子形成 2x2 锁死块，当前状态已无解，建议撤销或重置。';
+  final deadlockAnchors = movedBrickPosition == null
+      ? brickPositions
+      : <BoardPosition>{movedBrickPosition};
+  for (final anchorPosition in deadlockAnchors) {
+    if (formsFrozenSquareDeadlock(
+      state.currentLayout,
+      brickPositions,
+      state.targetPositions,
+      anchorPosition,
+    )) {
+      return '箱子形成 2x2 锁死块，当前状态已无解，建议撤销或重置。';
+    }
+
+    if (formsFreezeDeadlock(
+      layout: state.currentLayout,
+      brickPositions: brickPositions,
+      targetPositions: state.targetPositions,
+      deadTiles: state.deadTiles,
+      anchorPosition: anchorPosition,
+    )) {
+      return '箱子被墙体或其他箱子冻结，当前状态已无解，建议撤销或重置。';
+    }
   }
 
   return null;
