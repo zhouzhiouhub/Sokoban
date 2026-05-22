@@ -13,10 +13,16 @@ import 'level_catalog_controller.dart';
 const Object _unchanged = Object();
 
 final activeLevelCatalogProvider = Provider<List<LevelCatalogItem>>((ref) {
+  final builtInCatalogAsync = ref.watch(builtInLevelCatalogProvider);
+  final builtInCatalog = builtInCatalogAsync.hasValue
+      ? builtInCatalogAsync.requireValue
+      : const <LevelCatalogItem>[];
   final catalogState = ref.watch(levelCatalogControllerProvider);
-  return catalogState.hasValue
-      ? catalogState.requireValue.levelCatalog
-      : builtInLevelCatalog;
+  final customCatalog = catalogState.hasValue
+      ? catalogState.requireValue.customLevelCatalog
+      : const <LevelCatalogItem>[];
+
+  return [...builtInCatalog, ...customCatalog];
 });
 
 final gameInitialLevelIndexProvider = Provider<int>((ref) => 0);
@@ -242,7 +248,7 @@ class GameController extends Notifier<SokobanGameState> {
     final initialLevelIndex = ref.watch(gameInitialLevelIndexProvider);
 
     return SokobanGameState.load(
-      levelCatalog: levelCatalog.isEmpty ? builtInLevelCatalog : levelCatalog,
+      levelCatalog: levelCatalog,
       levelIndex: initialLevelIndex,
     );
   }

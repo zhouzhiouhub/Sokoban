@@ -1,0 +1,18 @@
+SokobanLevel(
+    number: 4,
+    title: '第4关',
+    description: '把箱子推到目标点。',
+    layout: [
+      '  #####        ',
+      '  #   # ###    ',
+      '  # BB# #T#    ',
+      '  # B # #T#    ',
+      '  ### ###T#    ',
+      '    #     #    ',
+      '   ##  #  #    ',
+      '   #   #  #    ',
+      '   #   ####    ',
+      '   #####       ',
+    ],
+    initialPlayerPosition: BoardPosition(row: 1, column: 3),
+  ),

@@ -15,6 +15,17 @@ void main() {
       expect(level.initialPlayerPosition.column, 1);
     });
 
+    test('parses a generated Dart snippet payload', () {
+      final level = parseGeneratedSokobanLevelDartSnippet(_validLevelDart);
+
+      expect(level.number, 41);
+      expect(level.title, '自定义关卡');
+      expect(level.description, '把箱子推到目标点。');
+      expect(level.layout, hasLength(6));
+      expect(level.initialPlayerPosition.row, 1);
+      expect(level.initialPlayerPosition.column, 1);
+    });
+
     test('uses fallback title when the imported title is blank', () {
       final level = parseImportedSokobanLevelJson(
         _validLevelJson.replaceFirst('"自定义关卡"', '"   "'),
@@ -191,6 +202,23 @@ const String _validLevelJson = '''
     "column": 1
   }
 }
+''';
+
+const String _validLevelDart = '''
+  SokobanLevel(
+    number: 41,
+    title: '自定义关卡',
+    description: '把箱子推到目标点。',
+    layout: [
+      '#####',
+      '#   #',
+      '# B #',
+      '# T #',
+      '#   #',
+      '#####',
+    ],
+    initialPlayerPosition: BoardPosition(row: 1, column: 1),
+  ),
 ''';
 
 const String _levelWithBoxOnTargetJson = '''

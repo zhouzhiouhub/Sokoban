@@ -9,11 +9,16 @@ import 'package:app/src/models/sokoban_level.dart';
 import 'package:app/src/ui/sokoban_wall_page.dart';
 
 void main() {
-  test('built-in level catalog wraps the designed levels', () {
-    expect(builtInLevelCatalog, hasLength(sokobanLevels.length));
-    expect(builtInLevelCatalog.first.id, 'built_in_1');
-    expect(builtInLevelCatalog.first.source, LevelSource.builtIn);
-    expect(builtInLevelCatalog.first.level, same(sokobanLevels.first));
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('built-in level catalog wraps the generated levels', () async {
+    final levels = await loadSokobanLevels();
+    final catalog = buildBuiltInLevelCatalog(levels);
+
+    expect(catalog, hasLength(levels.length));
+    expect(catalog.first.id, 'built_in_1');
+    expect(catalog.first.source, LevelSource.builtIn);
+    expect(catalog.first.level, same(levels.first));
   });
 
   testWidgets('SokobanWallPage uses an injected level catalog', (tester) async {
@@ -42,18 +47,21 @@ void main() {
   testWidgets('SokobanWallPage reloads when the initial level changes', (
     tester,
   ) async {
+    final levels = await loadSokobanLevels();
+
     await tester.pumpWidget(
       const MaterialApp(home: SokobanWallPage(initialLevelIndex: 0)),
     );
-    expect(find.text(appLevelTitle(sokobanLevels[0].title)), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text(appLevelTitle(levels[0].title)), findsOneWidget);
     expect(find.text('第 1 关'), findsOneWidget);
 
     await tester.pumpWidget(
       const MaterialApp(home: SokobanWallPage(initialLevelIndex: 1)),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text(appLevelTitle(sokobanLevels[1].title)), findsOneWidget);
+    expect(find.text(appLevelTitle(levels[1].title)), findsOneWidget);
     expect(find.text('第 2 关'), findsOneWidget);
     expect(find.text('第 1 关'), findsNothing);
   });

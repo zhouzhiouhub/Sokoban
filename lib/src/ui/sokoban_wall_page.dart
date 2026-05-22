@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../app_branding.dart';
 import '../controllers/game_controller.dart';
+import '../controllers/level_catalog_controller.dart';
 import '../input/game_intents.dart';
 import '../levels/level_catalog.dart';
 import 'movement_controls.dart';
@@ -39,7 +40,54 @@ class SokobanWallPage extends StatelessWidget {
     return ProviderScope(
       key: scopeKey,
       overrides: overrides,
-      child: const _SokobanWallView(),
+      child: levelCatalog == null
+          ? const _SokobanWallCatalogGate()
+          : const _SokobanWallView(),
+    );
+  }
+}
+
+class _SokobanWallCatalogGate extends ConsumerWidget {
+  const _SokobanWallCatalogGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final builtInCatalogAsync = ref.watch(builtInLevelCatalogProvider);
+    final activeCatalog = ref.watch(activeLevelCatalogProvider);
+
+    if (activeCatalog.isNotEmpty) {
+      return const _SokobanWallView();
+    }
+
+    if (builtInCatalogAsync.hasError) {
+      return _LevelCatalogLoadScaffold(
+        message: '生成关卡读取失败：${builtInCatalogAsync.error}',
+      );
+    }
+
+    return const _LevelCatalogLoadScaffold();
+  }
+}
+
+class _LevelCatalogLoadScaffold extends StatelessWidget {
+  const _LevelCatalogLoadScaffold({this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text(appName)),
+      body: SafeArea(
+        child: Center(
+          child: message == null
+              ? const CircularProgressIndicator()
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(message!, textAlign: TextAlign.center),
+                ),
+        ),
+      ),
     );
   }
 }

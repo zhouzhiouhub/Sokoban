@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 import '../models/sokoban_level.dart';
 import 'sokoban_levels.dart';
 
@@ -15,11 +17,23 @@ class LevelCatalogItem {
   final SokobanLevel level;
 }
 
-final List<LevelCatalogItem> builtInLevelCatalog = [
-  for (final level in sokobanLevels)
-    LevelCatalogItem(
-      id: 'built_in_${level.number}',
-      source: LevelSource.builtIn,
-      level: level,
-    ),
-];
+Future<List<LevelCatalogItem>> loadBuiltInLevelCatalog({
+  AssetBundle? bundle,
+}) async {
+  return buildBuiltInLevelCatalog(await loadSokobanLevels(bundle: bundle));
+}
+
+List<LevelCatalogItem> buildBuiltInLevelCatalog(List<SokobanLevel> levels) {
+  final catalog = <LevelCatalogItem>[];
+  for (var index = 0; index < levels.length; index++) {
+    catalog.add(
+      LevelCatalogItem(
+        id: 'built_in_${index + 1}',
+        source: LevelSource.builtIn,
+        level: levels[index],
+      ),
+    );
+  }
+
+  return List<LevelCatalogItem>.unmodifiable(catalog);
+}

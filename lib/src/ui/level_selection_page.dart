@@ -49,6 +49,15 @@ class LevelSelectionPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final builtInCatalogAsync = ref.watch(builtInLevelCatalogProvider);
+    final builtInLevelCatalog = builtInCatalogAsync.hasValue
+        ? builtInCatalogAsync.requireValue
+        : const <LevelCatalogItem>[];
+    final isLoadingBuiltInLevels =
+        builtInCatalogAsync.isLoading && !builtInCatalogAsync.hasValue;
+    final builtInLevelLoadError = builtInCatalogAsync.hasError
+        ? '生成关卡读取失败：${builtInCatalogAsync.error}'
+        : null;
     final catalogAsync = ref.watch(levelCatalogControllerProvider);
     final catalogState = catalogAsync.hasValue
         ? catalogAsync.requireValue
@@ -109,10 +118,10 @@ class LevelSelectionPage extends ConsumerWidget {
                 ),
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(sideInset, 12, sideInset, 0),
-                  sliver: _LevelTileSliverGrid(
+                  sliver: _BuiltInLevelSection(
+                    isLoading: isLoadingBuiltInLevels,
+                    loadError: builtInLevelLoadError,
                     items: builtInLevelCatalog,
-                    firstCatalogIndex: 0,
-                    customOffset: 0,
                     gridDelegate: gridDelegate,
                   ),
                 ),
@@ -129,6 +138,7 @@ class LevelSelectionPage extends ConsumerWidget {
                     isLoading: isLoadingCustomLevels,
                     loadError: customLevelLoadError,
                     items: customLevelCatalog,
+                    firstCatalogIndex: builtInLevelCatalog.length,
                     gridDelegate: gridDelegate,
                   ),
                 ),
@@ -189,8 +199,8 @@ class _ImportLevelDialogState extends State<_ImportLevelDialog> {
   }
 }
 
-class _CustomLevelSection extends StatelessWidget {
-  const _CustomLevelSection({
+class _BuiltInLevelSection extends StatelessWidget {
+  const _BuiltInLevelSection({
     required this.isLoading,
     required this.loadError,
     required this.items,
@@ -226,6 +236,59 @@ class _CustomLevelSection extends StatelessWidget {
       return const SliverToBoxAdapter(
         child: _InlineMessage(
           icon: LucideIcons.packageOpen,
+          message: '未找到生成关卡',
+        ),
+      );
+    }
+
+    return _LevelTileSliverGrid(
+      items: items,
+      firstCatalogIndex: 0,
+      customOffset: 0,
+      gridDelegate: gridDelegate,
+    );
+  }
+}
+
+class _CustomLevelSection extends StatelessWidget {
+  const _CustomLevelSection({
+    required this.isLoading,
+    required this.loadError,
+    required this.items,
+    required this.firstCatalogIndex,
+    required this.gridDelegate,
+  });
+
+  final bool isLoading;
+  final String? loadError;
+  final List<LevelCatalogItem> items;
+  final int firstCatalogIndex;
+  final SliverGridDelegate gridDelegate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const SliverToBoxAdapter(
+        child: SizedBox(
+          height: 72,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (loadError != null) {
+      return SliverToBoxAdapter(
+        child: _InlineMessage(
+          icon: LucideIcons.triangleAlert,
+          message: loadError!,
+        ),
+      );
+    }
+
+    if (items.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: _InlineMessage(
+          icon: LucideIcons.packageOpen,
           message: '还没有自定义关卡',
         ),
       );
@@ -233,7 +296,7 @@ class _CustomLevelSection extends StatelessWidget {
 
     return _LevelTileSliverGrid(
       items: items,
-      firstCatalogIndex: builtInLevelCatalog.length,
+      firstCatalogIndex: firstCatalogIndex,
       customOffset: 0,
       gridDelegate: gridDelegate,
     );

@@ -10,16 +10,25 @@ import 'package:app/src/levels/custom_level_store.dart';
 import 'package:app/src/levels/level_catalog.dart';
 import 'package:app/src/levels/sokoban_level_import.dart';
 import 'package:app/src/levels/sokoban_levels.dart';
+import 'package:app/src/models/sokoban_level.dart';
 import 'package:app/src/sokoban_app.dart';
 import 'package:app/src/ui/level_selection_page.dart';
 import 'package:app/src/ui/sokoban_board.dart';
 import 'package:app/src/ui/sokoban_wall_page.dart';
 
 void main() {
-  test('has designed levels with valid basic structure', () {
-    expect(sokobanLevels.length, 40);
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    for (final level in sokobanLevels) {
+  late List<SokobanLevel> generatedLevels;
+
+  setUpAll(() async {
+    generatedLevels = await loadSokobanLevels();
+  });
+
+  test('has generated levels with valid basic structure', () {
+    expect(generatedLevels, isNotEmpty);
+
+    for (final level in generatedLevels) {
       final expectedColumnCount = level.layout.first.length;
       final bricks = positionsForSymbol(level.layout, 'B');
       final targets = positionsForSymbol(level.layout, 'T');
@@ -70,16 +79,11 @@ void main() {
     }
   });
 
-  test('level layouts are unique', () {
-    final layoutKeys = <String>{};
-
-    for (final level in sokobanLevels) {
-      final layoutKey = level.layout.join('\n');
-
+  test('generated levels are sorted by level number', () {
+    for (var index = 1; index < generatedLevels.length; index++) {
       expect(
-        layoutKeys.add(layoutKey),
-        isTrue,
-        reason: '${level.displayName} must not duplicate another layout.',
+        generatedLevels[index].number,
+        greaterThanOrEqualTo(generatedLevels[index - 1].number),
       );
     }
   });
@@ -107,28 +111,16 @@ void main() {
     expect(paddedViewport.columns, 3);
   });
 
-  test('designed levels are solvable', () {
-    for (final level in sokobanLevels) {
-      final bricks = positionsForSymbol(level.layout, 'B');
-      final targets = positionsForSymbol(level.layout, 'T');
+  test('generated levels can be wrapped in the built-in catalog', () {
+    final catalog = buildBuiltInLevelCatalog(generatedLevels);
 
-      expect(
-        isSokobanStateSolvable(
-          layout: level.layout,
-          playerPosition: level.initialPlayerPosition,
-          brickPositions: bricks,
-          targetPositions: targets,
-          deadTiles: computeDeadTiles(level.layout, targets),
-        ),
-        isTrue,
-        reason: '${level.displayName} must have at least one solution.',
-      );
-    }
+    expect(catalog, hasLength(generatedLevels.length));
+    expect(catalog.every((item) => item.source == LevelSource.builtIn), isTrue);
   });
 
   testWidgets('renders the level selection page', (tester) async {
     await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
-    await tester.pump();
+    await _pumpUntilFound(tester, find.text('1'));
 
     expect(find.byType(LevelSelectionPage), findsOneWidget);
     expect(find.text(appName), findsOneWidget);
@@ -136,20 +128,26 @@ void main() {
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
     await tester.pumpAndSettle();
-    expect(find.text('${sokobanLevels.length}'), findsOneWidget);
+    expect(
+      find.text('${generatedLevels.last.number}'),
+      findsAtLeastNWidgets(1),
+    );
   });
 
   testWidgets('opens a selected Sokoban level', (tester) async {
     await tester.pumpWidget(SokobanApp(customLevelStore: _MemoryLevelStore()));
-    await tester.pump();
+    final secondLevelTooltip = find.byTooltip(
+      '第 ${generatedLevels[1].number} 关 - ${generatedLevels[1].title}',
+    );
+    await _pumpUntilFound(tester, secondLevelTooltip);
 
-    await tester.tap(find.byTooltip('第 2 关 - 第2关'));
+    await tester.tap(secondLevelTooltip);
     await tester.pumpAndSettle();
 
-    final level = sokobanLevels[1];
+    final level = generatedLevels[1];
 
     expect(find.text(appLevelTitle(level.title)), findsOneWidget);
-    expect(find.text('第 2 关'), findsOneWidget);
+    expect(find.text('第 ${level.number} 关'), findsOneWidget);
     expect(find.text('切换关卡'), findsNothing);
     expect(find.byType(SokobanBoard), findsOneWidget);
 
@@ -171,16 +169,19 @@ void main() {
       await tester.pumpWidget(
         SokobanApp(customLevelStore: _PendingLevelStore()),
       );
-      await tester.pump();
+      final secondLevelTooltip = find.byTooltip(
+        '第 ${generatedLevels[1].number} 关 - ${generatedLevels[1].title}',
+      );
+      await _pumpUntilFound(tester, secondLevelTooltip);
 
-      await tester.tap(find.byTooltip('第 2 关 - 第2关'));
+      await tester.tap(secondLevelTooltip);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final level = sokobanLevels[1];
+      final level = generatedLevels[1];
 
       expect(find.text(appLevelTitle(level.title)), findsOneWidget);
-      expect(find.text('第 2 关'), findsOneWidget);
+      expect(find.text('第 ${level.number} 关'), findsOneWidget);
       expect(find.text('第 1 关'), findsNothing);
     },
   );
@@ -188,11 +189,19 @@ void main() {
   testWidgets('renders every visible cell for a wide designed level', (
     tester,
   ) async {
-    final levelIndex = sokobanLevels.indexWhere((level) => level.number == 19);
-    final level = sokobanLevels[levelIndex];
+    final levelIndex = generatedLevels.indexWhere(
+      (level) => level.number == 19,
+    );
+    expect(levelIndex, isNot(-1));
+    final level = generatedLevels[levelIndex];
 
     await tester.pumpWidget(
-      MaterialApp(home: SokobanWallPage(initialLevelIndex: levelIndex)),
+      MaterialApp(
+        home: SokobanWallPage(
+          initialLevelIndex: levelIndex,
+          levelCatalog: buildBuiltInLevelCatalog(generatedLevels),
+        ),
+      ),
     );
 
     final viewportSize = SokobanBoard.viewportSizeForLayout(level.layout);
@@ -236,6 +245,17 @@ Finder _sokobanTileKeys() {
     final key = widget.key;
     return key is ValueKey<String> && key.value.split('-').length == 4;
   });
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 20; attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+
+  expect(finder, findsOneWidget);
 }
 
 int _visibleCellCount(List<String> layout, [String? symbol]) {

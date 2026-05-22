@@ -10,12 +10,14 @@ class SokobanLevelValidationOptions {
   const SokobanLevelValidationOptions({
     this.maxRows,
     this.maxColumns,
+    this.validateInitialDeadTiles = true,
     this.requireSolvable = false,
     this.maxBoxesForSolvability = 8,
   });
 
   final int? maxRows;
   final int? maxColumns;
+  final bool validateInitialDeadTiles;
   final bool requireSolvable;
   final int maxBoxesForSolvability;
 }
@@ -59,6 +61,35 @@ Future<SokobanLevel> parseImportedSokobanLevelJsonAsync(
 }) async {
   await Future<void>.delayed(Duration.zero);
   return parseImportedSokobanLevelJson(source, options: options);
+}
+
+SokobanLevel parseGeneratedSokobanLevelDartSnippet(
+  String source, {
+  SokobanLevelValidationOptions options = const SokobanLevelValidationOptions(),
+}) {
+  final layoutSource = _requiredDartListSource(source, 'layout');
+  final layout = _dartStringLiteralPattern
+      .allMatches(layoutSource)
+      .map((match) => _unescapeDartSingleQuotedString(match.group(1)!))
+      .toList();
+  final playerPosition = _requiredDartBoardPosition(
+    source,
+    'initialPlayerPosition',
+  );
+
+  final level = SokobanLevel(
+    number: _requiredDartInt(source, 'number'),
+    title: _requiredDartString(source, 'title'),
+    description: _requiredDartString(source, 'description'),
+    layout: layout,
+    initialPlayerPosition: playerPosition,
+  );
+  final errors = validateImportedSokobanLevel(level, options: options);
+  if (errors.isNotEmpty) {
+    throw SokobanLevelImportException(errors.first);
+  }
+
+  return level;
 }
 
 List<String> validateImportedSokobanLevel(
@@ -134,11 +165,18 @@ List<String> validateImportedSokobanLevel(
     return errors;
   }
 
-  final deadTiles = computeDeadTiles(layout, targets);
-  for (final brickPosition in bricks) {
-    if (!targets.contains(brickPosition) && deadTiles.contains(brickPosition)) {
-      errors.add('当前关卡开局就有箱子落在死格，初始状态无解。');
-      return errors;
+  final shouldComputeDeadTiles =
+      options.validateInitialDeadTiles || options.requireSolvable;
+  final deadTiles = shouldComputeDeadTiles
+      ? computeDeadTiles(layout, targets)
+      : const <BoardPosition>{};
+  if (options.validateInitialDeadTiles) {
+    for (final brickPosition in bricks) {
+      if (!targets.contains(brickPosition) &&
+          deadTiles.contains(brickPosition)) {
+        errors.add('当前关卡开局就有箱子落在死格，初始状态无解。');
+        return errors;
+      }
     }
   }
 
@@ -224,4 +262,98 @@ Map<String, Object?> _requiredMap(Map<String, Object?> payload, String key) {
   }
 
   throw SokobanLevelImportException('缺少必需字段 `$key`，或字段类型不是 object。');
+}
+
+final RegExp _dartStringLiteralPattern = RegExp(r"'((?:\\.|[^'\\])*)'");
+
+int _requiredDartInt(String source, String key) {
+  final match = RegExp(
+    r'\b' + RegExp.escape(key) + r':\s*(-?\d+)',
+  ).firstMatch(source);
+  if (match == null) {
+    throw SokobanLevelImportException('Dart 片段缺少字段 `$key`。');
+  }
+
+  return int.parse(match.group(1)!);
+}
+
+String _requiredDartString(String source, String key) {
+  final match = RegExp(
+    r'\b' + RegExp.escape(key) + r":\s*'((?:\\.|[^'\\])*)'",
+  ).firstMatch(source);
+  if (match == null) {
+    throw SokobanLevelImportException('Dart 片段缺少字段 `$key`。');
+  }
+
+  return _unescapeDartSingleQuotedString(match.group(1)!);
+}
+
+String _requiredDartListSource(String source, String key) {
+  final match = RegExp(
+    r'\b' + RegExp.escape(key) + r':\s*\[(.*?)\]',
+    dotAll: true,
+  ).firstMatch(source);
+  if (match == null) {
+    throw SokobanLevelImportException('Dart 片段缺少列表字段 `$key`。');
+  }
+
+  return match.group(1)!;
+}
+
+BoardPosition _requiredDartBoardPosition(String source, String key) {
+  final match = RegExp(
+    r'\b' +
+        RegExp.escape(key) +
+        r':\s*BoardPosition\s*\(\s*row:\s*(-?\d+),\s*column:\s*(-?\d+)\s*\)',
+    dotAll: true,
+  ).firstMatch(source);
+  if (match == null) {
+    throw SokobanLevelImportException('Dart 片段缺少坐标字段 `$key`。');
+  }
+
+  return BoardPosition(
+    row: int.parse(match.group(1)!),
+    column: int.parse(match.group(2)!),
+  );
+}
+
+String _unescapeDartSingleQuotedString(String source) {
+  final buffer = StringBuffer();
+
+  for (var index = 0; index < source.length; index++) {
+    final char = source[index];
+    if (char != '\\') {
+      buffer.write(char);
+      continue;
+    }
+
+    index += 1;
+    if (index >= source.length) {
+      throw const SokobanLevelImportException('Dart 字符串转义不完整。');
+    }
+
+    final escaped = source[index];
+    switch (escaped) {
+      case '\\':
+        buffer.write('\\');
+        break;
+      case "'":
+        buffer.write("'");
+        break;
+      case 'n':
+        buffer.write('\n');
+        break;
+      case 'r':
+        buffer.write('\r');
+        break;
+      case 't':
+        buffer.write('\t');
+        break;
+      default:
+        buffer.write(escaped);
+        break;
+    }
+  }
+
+  return buffer.toString();
 }

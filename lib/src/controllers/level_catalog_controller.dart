@@ -4,6 +4,12 @@ import '../levels/custom_level_import_source.dart';
 import '../levels/custom_level_store.dart';
 import '../levels/level_catalog.dart';
 
+final builtInLevelCatalogProvider = FutureProvider<List<LevelCatalogItem>>((
+  ref,
+) {
+  return loadBuiltInLevelCatalog();
+});
+
 final customLevelStoreProvider = Provider<CustomLevelStore>((ref) {
   return CustomLevelStore();
 });
@@ -21,10 +27,6 @@ class LevelCatalogState {
 
   final List<LevelCatalogItem> customLevelCatalog;
   final bool isImporting;
-
-  List<LevelCatalogItem> get levelCatalog {
-    return [...builtInLevelCatalog, ...customLevelCatalog];
-  }
 
   LevelCatalogState copyWith({
     List<LevelCatalogItem>? customLevelCatalog,

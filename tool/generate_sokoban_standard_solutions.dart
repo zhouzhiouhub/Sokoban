@@ -1,9 +1,12 @@
 import 'dart:io';
 
-import '../lib/src/game/sokoban_rules.dart';
-import '../lib/src/levels/sokoban_levels.dart';
-import '../lib/src/models/board_position.dart';
-import '../lib/src/models/sokoban_level.dart';
+import 'package:app/src/game/sokoban_rules.dart';
+import 'package:app/src/levels/sokoban_level_import.dart';
+import 'package:app/src/models/board_position.dart';
+import 'package:app/src/models/sokoban_level.dart';
+
+const SokobanLevelValidationOptions _generatedLevelValidationOptions =
+    SokobanLevelValidationOptions(validateInitialDeadTiles: false);
 
 void main(List<String> arguments) {
   final selectedLevelNumbers = _selectedLevelNumbers(arguments);
@@ -17,7 +20,7 @@ void main(List<String> arguments) {
   final solvedLevels = <int, List<SokobanPushHint>>{};
   final failedLevels = <String>[];
 
-  for (final level in sokobanLevels) {
+  for (final level in _loadGeneratedLevels()) {
     if (selectedLevelNumbers.isNotEmpty &&
         !selectedLevelNumbers.contains(level.number)) {
       continue;
@@ -45,6 +48,69 @@ void main(List<String> arguments) {
       stderr.writeln(failedLevel);
     }
     exitCode = 1;
+  }
+}
+
+List<SokobanLevel> _loadGeneratedLevels() {
+  final directory = Directory('tools/generated_levels');
+  if (!directory.existsSync()) {
+    throw StateError('Missing tools/generated_levels directory.');
+  }
+
+  final files =
+      directory
+          .listSync()
+          .whereType<File>()
+          .where(_isGeneratedLevelFile)
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+  if (files.isEmpty) {
+    throw StateError('No generated level files found.');
+  }
+
+  final levels =
+      files
+          .map(
+            (file) => (
+              path: file.path,
+              level: _parseGeneratedLevelFile(
+                file.path,
+                file.readAsStringSync(),
+              ),
+            ),
+          )
+          .toList()
+        ..sort((a, b) {
+          final numberOrder = a.level.number.compareTo(b.level.number);
+          if (numberOrder != 0) {
+            return numberOrder;
+          }
+
+          return a.path.compareTo(b.path);
+        });
+
+  return levels.map((loadedLevel) => loadedLevel.level).toList(growable: false);
+}
+
+bool _isGeneratedLevelFile(File file) {
+  return file.path.endsWith('.json') || file.path.endsWith('.dart.txt');
+}
+
+SokobanLevel _parseGeneratedLevelFile(String path, String source) {
+  try {
+    if (path.endsWith('.json')) {
+      return parseImportedSokobanLevelJson(
+        source,
+        options: _generatedLevelValidationOptions,
+      );
+    }
+
+    return parseGeneratedSokobanLevelDartSnippet(
+      source,
+      options: _generatedLevelValidationOptions,
+    );
+  } on SokobanLevelImportException catch (error) {
+    throw FormatException('Generated level $path is invalid: ${error.message}');
   }
 }
 
