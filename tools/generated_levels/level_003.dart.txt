@@ -1,6 +1,6 @@
   SokobanLevel(
-    number: 25,
-    title: '自定义关卡',
+    number: 3,
+    title: '第3关',
     description: '把箱子推到目标点。',
     layout: [
       '               ',
