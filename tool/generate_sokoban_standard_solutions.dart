@@ -7,6 +7,7 @@ import 'package:app/src/models/sokoban_level.dart';
 
 const SokobanLevelValidationOptions _generatedLevelValidationOptions =
     SokobanLevelValidationOptions(validateInitialDeadTiles: false);
+const String _defaultSolutionDirectoryPath = 'tools/solution_levels';
 
 void main(List<String> arguments) {
   final selectedLevelNumbers = _selectedLevelNumbers(arguments);
@@ -15,6 +16,8 @@ void main(List<String> arguments) {
     '--max-visited',
     fallback: 250000,
   );
+  final outputDirectoryPath =
+      _stringOption(arguments, '--output-dir') ?? _defaultSolutionDirectoryPath;
   final writeFile = !arguments.contains('--check');
 
   final solvedLevels = <int, List<SokobanPushHint>>{};
@@ -37,9 +40,11 @@ void main(List<String> arguments) {
   }
 
   if (writeFile) {
-    File(
-      'lib/src/levels/sokoban_standard_solutions.dart',
-    ).writeAsStringSync(_renderSolutionsFile(solvedLevels));
+    _writeSolutionFiles(
+      solvedLevels,
+      outputDirectoryPath: outputDirectoryPath,
+      removeStaleFiles: selectedLevelNumbers.isEmpty,
+    );
   }
 
   if (failedLevels.isNotEmpty) {
@@ -136,6 +141,15 @@ int _intOption(List<String> arguments, String option, {required int fallback}) {
   return int.parse(arguments[optionIndex + 1]);
 }
 
+String? _stringOption(List<String> arguments, String option) {
+  final optionIndex = arguments.indexOf(option);
+  if (optionIndex < 0 || optionIndex + 1 >= arguments.length) {
+    return null;
+  }
+
+  return arguments[optionIndex + 1];
+}
+
 SokobanHintSearchResult _solveLevel(
   SokobanLevel level, {
   required int maxVisitedStates,
@@ -151,85 +165,43 @@ SokobanHintSearchResult _solveLevel(
   );
 }
 
-String _renderSolutionsFile(Map<int, List<SokobanPushHint>> solutions) {
-  final buffer = StringBuffer()
-    ..writeln("import '../game/sokoban_rules.dart';")
-    ..writeln("import '../models/board_position.dart';")
-    ..writeln()
-    ..writeln(
-      'const Map<int, List<String>> '
-      '_encodedBuiltInSokobanStandardSolutions = {',
+void _writeSolutionFiles(
+  Map<int, List<SokobanPushHint>> solutions, {
+  required String outputDirectoryPath,
+  required bool removeStaleFiles,
+}) {
+  final directory = Directory(outputDirectoryPath)..createSync(recursive: true);
+  if (removeStaleFiles) {
+    final staleSolutionFiles = directory.listSync().whereType<File>().where(
+      (file) => _solutionFileNamePattern.hasMatch(_fileName(file)),
     );
+    for (final file in staleSolutionFiles) {
+      file.deleteSync();
+    }
+  }
 
   final levelNumbers = solutions.keys.toList()..sort();
   for (final levelNumber in levelNumbers) {
-    buffer.writeln('  $levelNumber: [');
-    for (final push in solutions[levelNumber]!) {
-      buffer.writeln("    '${_encodePush(push)}',");
-    }
-    buffer.writeln('  ],');
+    final outputFile = File(
+      '${directory.path}${Platform.pathSeparator}${_solutionFileName(levelNumber)}',
+    );
+    outputFile.writeAsStringSync(_renderSolutionFile(solutions[levelNumber]!));
+    stdout.writeln('Wrote ${outputFile.path}');
   }
+}
 
-  buffer
-    ..writeln('};')
-    ..writeln()
-    ..writeln(
-      'final Map<int, List<SokobanPushHint>> '
-      '_decodedBuiltInSokobanStandardSolutions =',
-    )
-    ..writeln('    <int, List<SokobanPushHint>>{};')
-    ..writeln()
-    ..writeln('List<SokobanPushHint> builtInSokobanStandardSolution(')
-    ..writeln('  int levelNumber,')
-    ..writeln(') {')
-    ..writeln('  return _decodedBuiltInSokobanStandardSolutions.putIfAbsent(')
-    ..writeln('    levelNumber,')
-    ..writeln('    () {')
-    ..writeln('      final encodedSolution =')
-    ..writeln('          _encodedBuiltInSokobanStandardSolutions[levelNumber];')
-    ..writeln('      if (encodedSolution == null) {')
-    ..writeln('        return const <SokobanPushHint>[];')
-    ..writeln('      }')
-    ..writeln()
-    ..writeln('      return encodedSolution.map(_decodePushHint).toList(')
-    ..writeln('        growable: false,')
-    ..writeln('      );')
-    ..writeln('    },')
-    ..writeln('  );')
-    ..writeln('}')
-    ..writeln()
-    ..writeln('SokobanPushHint _decodePushHint(String encodedPush) {')
-    ..writeln("  final parts = encodedPush.split(',');")
-    ..writeln('  if (parts.length != 3) {')
-    ..writeln(
-      "    throw FormatException('Invalid Sokoban push hint: "
-      r"$encodedPush');",
-    )
-    ..writeln('  }')
-    ..writeln()
-    ..writeln('  return SokobanPushHint(')
-    ..writeln('    brickPosition: BoardPosition(')
-    ..writeln('      row: int.parse(parts[0]),')
-    ..writeln('      column: int.parse(parts[1]),')
-    ..writeln('    ),')
-    ..writeln('    direction: _decodeDirection(parts[2]),')
-    ..writeln('  );')
-    ..writeln('}')
-    ..writeln()
-    ..writeln('BoardPosition _decodeDirection(String value) {')
-    ..writeln('  return switch (value) {')
-    ..writeln("    'U' => const BoardPosition(row: -1, column: 0),")
-    ..writeln("    'D' => const BoardPosition(row: 1, column: 0),")
-    ..writeln("    'L' => const BoardPosition(row: 0, column: -1),")
-    ..writeln("    'R' => const BoardPosition(row: 0, column: 1),")
-    ..writeln(
-      "    _ => throw FormatException('Invalid Sokoban push direction: "
-      r"$value'),",
-    )
-    ..writeln('  };')
-    ..writeln('}');
+final RegExp _solutionFileNamePattern = RegExp(r'^level_\d{3}\.txt$');
 
-  return buffer.toString();
+String _fileName(File file) {
+  return file.path.split(RegExp(r'[\\/]')).last;
+}
+
+String _solutionFileName(int levelNumber) {
+  return 'level_${levelNumber.toString().padLeft(3, '0')}.txt';
+}
+
+String _renderSolutionFile(List<SokobanPushHint> solution) {
+  return '${solution.map(_encodePush).join(';')}\n';
 }
 
 String _encodePush(SokobanPushHint push) {

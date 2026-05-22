@@ -1,21 +1,61 @@
+import 'package:flutter/services.dart';
+
 import '../game/sokoban_rules.dart';
 import '../models/board_position.dart';
 
-const Map<int, List<String>> _encodedBuiltInSokobanStandardSolutions = {};
+const String sokobanSolutionAssetDirectory = 'tools/solution_levels/';
 
-final Map<int, List<SokobanPushHint>> _decodedBuiltInSokobanStandardSolutions =
-    <int, List<SokobanPushHint>>{};
+Future<Map<int, List<SokobanPushHint>>> loadBuiltInSokobanStandardSolutions({
+  AssetBundle? bundle,
+}) async {
+  final effectiveBundle = bundle ?? rootBundle;
+  final manifest = await AssetManifest.loadFromAssetBundle(effectiveBundle);
+  final solutionAssets =
+      manifest.listAssets().where(_isStandardSolutionAsset).toList()..sort();
 
-List<SokobanPushHint> builtInSokobanStandardSolution(int levelNumber) {
-  return _decodedBuiltInSokobanStandardSolutions.putIfAbsent(levelNumber, () {
-    final encodedSolution =
-        _encodedBuiltInSokobanStandardSolutions[levelNumber];
-    if (encodedSolution == null) {
-      return const <SokobanPushHint>[];
+  final solutions = <int, List<SokobanPushHint>>{};
+  for (final assetPath in solutionAssets) {
+    final levelNumber = _levelNumberFromSolutionAsset(assetPath);
+    if (levelNumber == null) {
+      continue;
     }
 
-    return encodedSolution.map(_decodePushHint).toList(growable: false);
-  });
+    final source = await effectiveBundle.loadString(assetPath);
+    final solution = parseSokobanStandardSolution(source);
+    if (solution.isNotEmpty) {
+      solutions[levelNumber] = solution;
+    }
+  }
+
+  return Map<int, List<SokobanPushHint>>.unmodifiable(solutions);
+}
+
+List<SokobanPushHint> parseSokobanStandardSolution(String source) {
+  final trimmedSource = source.trim();
+  if (trimmedSource.isEmpty) {
+    return const <SokobanPushHint>[];
+  }
+
+  return trimmedSource
+      .split(RegExp(r'[;\s]+'))
+      .where((encodedPush) => encodedPush.isNotEmpty)
+      .map(_decodePushHint)
+      .toList(growable: false);
+}
+
+bool _isStandardSolutionAsset(String assetPath) {
+  return assetPath.startsWith(sokobanSolutionAssetDirectory) &&
+      assetPath.endsWith('.txt');
+}
+
+int? _levelNumberFromSolutionAsset(String assetPath) {
+  final fileName = assetPath.split('/').last;
+  final match = RegExp(r'^level_(\d+)\.txt$').firstMatch(fileName);
+  if (match == null) {
+    return null;
+  }
+
+  return int.parse(match.group(1)!);
 }
 
 SokobanPushHint _decodePushHint(String encodedPush) {

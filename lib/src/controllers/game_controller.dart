@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../game/sokoban_rules.dart';
 import '../levels/level_catalog.dart';
-import '../levels/sokoban_standard_solutions.dart';
 import '../models/board_position.dart';
 import '../models/board_tile.dart';
 import '../models/board_viewport_size.dart';
@@ -394,9 +393,18 @@ class GameController extends Notifier<SokobanGameState> {
       return GameActionMessage.deadlock(currentState.deadlockMessage!);
     }
 
-    final standardHint = _standardHintForState(currentState);
-    if (standardHint != null) {
-      return _showPushHint(currentState, standardHint);
+    final standardPathIndex = _standardHintPathIndexForState(currentState);
+    if (standardPathIndex != null) {
+      final standardHint = standardPathIndex.hintForState(
+        layout: currentState.currentLayout,
+        playerPosition: currentState.playerPosition,
+        brickPositions: currentState.brickPositions,
+      );
+      if (standardHint != null) {
+        return _showPushHint(currentState, standardHint);
+      }
+
+      return _showStandardPathRecoveryHint(currentState, standardPathIndex);
     }
 
     final cachedHint = _runtimeHintForState(currentState);
@@ -430,14 +438,14 @@ class GameController extends Notifier<SokobanGameState> {
     }
   }
 
-  SokobanPushHint? _standardHintForState(SokobanGameState currentState) {
+  SokobanHintPathIndex? _standardHintPathIndexForState(
+    SokobanGameState currentState,
+  ) {
     if (currentState.currentCatalogItem.source != LevelSource.builtIn) {
       return null;
     }
 
-    final solution = builtInSokobanStandardSolution(
-      currentState.currentLevel.number,
-    );
+    final solution = currentState.currentCatalogItem.standardSolution;
     if (solution.isEmpty) {
       return null;
     }
@@ -458,11 +466,7 @@ class GameController extends Notifier<SokobanGameState> {
       return null;
     }
 
-    return index.hintForState(
-      layout: currentState.currentLayout,
-      playerPosition: currentState.playerPosition,
-      brickPositions: currentState.brickPositions,
-    );
+    return index;
   }
 
   SokobanPushHint? _runtimeHintForState(SokobanGameState currentState) {
@@ -522,6 +526,56 @@ class GameController extends Notifier<SokobanGameState> {
 
     return GameActionMessage.hint(hintMessage);
   }
+
+  GameActionMessage _showStandardPathRecoveryHint(
+    SokobanGameState currentState,
+    SokobanHintPathIndex standardPathIndex,
+  ) {
+    final recovery = _standardPathRecovery(currentState, standardPathIndex);
+
+    state = currentState.clearActiveHint();
+    if (recovery == null) {
+      return const GameActionMessage.hint(
+        '当前走法已经偏离标准答案，且没有找到可撤销的正确节点。建议重置本关后再按提示路线继续。',
+      );
+    }
+
+    return GameActionMessage.hint(
+      '当前走法已经偏离标准答案。请先撤销 ${recovery.undoCount} 步，回到第 ${recovery.stepCount} 步，再点击提示继续。',
+    );
+  }
+
+  _StandardPathRecovery? _standardPathRecovery(
+    SokobanGameState currentState,
+    SokobanHintPathIndex standardPathIndex,
+  ) {
+    for (var index = currentState.moveHistory.length - 1; index >= 0; index--) {
+      final snapshot = currentState.moveHistory[index];
+      final hint = standardPathIndex.hintForState(
+        layout: currentState.currentLayout,
+        playerPosition: snapshot.playerPosition,
+        brickPositions: snapshot.brickPositions,
+      );
+      if (hint != null) {
+        return _StandardPathRecovery(
+          undoCount: currentState.moveHistory.length - index,
+          stepCount: snapshot.stepCount,
+        );
+      }
+    }
+
+    return null;
+  }
+}
+
+class _StandardPathRecovery {
+  const _StandardPathRecovery({
+    required this.undoCount,
+    required this.stepCount,
+  });
+
+  final int undoCount;
+  final int stepCount;
 }
 
 int _normalisedLevelIndex(int levelIndex, int levelCount) {

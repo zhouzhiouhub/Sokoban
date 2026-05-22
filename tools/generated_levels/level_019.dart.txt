@@ -1,6 +1,6 @@
   SokobanLevel(
     number: 19,
-    title: '自定义关卡',
+    title: '第19关',
     description: '把箱子推到目标点。',
     layout: [
       '          ####     ',
@@ -12,8 +12,8 @@
       '# B  #TTTTT#B#B   #',
       '#   ### #### # #B #',
       '##B #        #  B #',
-      ' #### # ###### #B #',
-      '    #   #    #    #',
+      ' #  # # ###### #B #',
+      ' ####   #    #    #',
       '    #####    ######',
     ],
     initialPlayerPosition: BoardPosition(row: 3, column: 14),
