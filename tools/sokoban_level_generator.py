@@ -4,6 +4,23 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+try:
+    from sokoban_level_solver import (
+        BoardPosition as SolverBoardPosition,
+        format_pushes,
+        SokobanLevel as SolverLevel,
+        SokobanSolveTimeout,
+        SokobanSolver,
+    )
+except ImportError:
+    from .sokoban_level_solver import (
+        BoardPosition as SolverBoardPosition,
+        format_pushes,
+        SokobanLevel as SolverLevel,
+        SokobanSolveTimeout,
+        SokobanSolver,
+    )
+
 
 CELL_SIZE = 30
 BOARD_LABEL_MARGIN = 28
@@ -13,9 +30,11 @@ DEFAULT_ROWS = 10
 DEFAULT_COLUMNS = 15
 MAX_ROWS = 40
 MAX_COLUMNS = 40
+DEFAULT_SOLVER_TIME_LIMIT_SECONDS = 60
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPORT_DIR = PROJECT_ROOT / "tools" / "generated_levels"
+DEFAULT_SOLUTION_DIR = PROJECT_ROOT / "tools" / "solution_levels"
 LEVEL_NUMBER_PATTERN = re.compile(r"\bnumber\s*:\s*(\d+)\b")
 LEVEL_FILENAME_PATTERN = re.compile(r"level[_-]?(\d+)", re.IGNORECASE)
 DART_STRING_LITERAL_PATTERN = re.compile(
@@ -170,6 +189,51 @@ def imported_level_payload_from_file(path):
         if parse_errors:
             raise ValueError(f"{parse_errors[0]}\n{error}") from error
         raise
+
+
+def solution_text_for_level_payload(
+    payload,
+    max_seconds=DEFAULT_SOLVER_TIME_LIMIT_SECONDS,
+):
+    solver_level = _solver_level_from_payload(payload)
+    solver = SokobanSolver(solver_level)
+    try:
+        pushes = solver.solve_pushes(max_seconds=max_seconds)
+    except SokobanSolveTimeout as error:
+        raise ValueError(str(error)) from error
+
+    if pushes is None:
+        raise ValueError("未找到可通关解决方案，已取消导出。")
+
+    return format_pushes(pushes)
+
+
+def solution_path_for_level_number(level_number):
+    return DEFAULT_SOLUTION_DIR / f"level_{level_number:03}.txt"
+
+
+def write_solution_for_level_payload(payload, solution_text=None):
+    if solution_text is None:
+        solution_text = solution_text_for_level_payload(payload)
+
+    DEFAULT_SOLUTION_DIR.mkdir(parents=True, exist_ok=True)
+    solution_path = solution_path_for_level_number(payload["number"])
+    solution_path.write_text(
+        f"{solution_text}\n" if solution_text else "",
+        encoding="utf-8",
+    )
+    return solution_path
+
+
+def _solver_level_from_payload(payload):
+    player_position = payload["initialPlayerPosition"]
+    return SolverLevel(
+        layout=tuple(payload["layout"]),
+        initial_player_position=SolverBoardPosition(
+            row=player_position["row"],
+            column=player_position["column"],
+        ),
+    )
 
 
 def _import_payload_from_json_text(source, path):
@@ -1066,13 +1130,34 @@ class SokobanLevelGenerator(tk.Tk):
         if not path:
             return
 
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-            file.write("\n")
+        try:
+            self.status_var.set("正在生成解决方案...")
+            self.update_idletasks()
+            solution_text = solution_text_for_level_payload(payload)
+        except ValueError as error:
+            messagebox.showerror("无法导出", str(error))
+            self.status_var.set(str(error))
+            return
 
-        self.status_var.set(f"已导出 JSON：{path}")
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(payload, file, ensure_ascii=False, indent=2)
+                file.write("\n")
+            solution_path = write_solution_for_level_payload(
+                payload,
+                solution_text=solution_text,
+            )
+        except OSError as error:
+            messagebox.showerror("无法导出", f"无法写入文件：{error}")
+            self.status_var.set(f"无法写入文件：{error}")
+            return
+
+        self.status_var.set(f"已导出 JSON：{path}；解决方案：{solution_path}")
         self._refresh_auto_level_number()
-        messagebox.showinfo("导出完成", f"已导出 JSON：\n{path}")
+        messagebox.showinfo(
+            "导出完成",
+            f"已导出 JSON：\n{path}\n\n已生成解决方案：\n{solution_path}",
+        )
 
     def _export_dart(self):
         try:
@@ -1093,17 +1178,38 @@ class SokobanLevelGenerator(tk.Tk):
         if not path:
             return
 
+        try:
+            self.status_var.set("正在生成解决方案...")
+            self.update_idletasks()
+            solution_text = solution_text_for_level_payload(payload)
+        except ValueError as error:
+            messagebox.showerror("无法导出", str(error))
+            self.status_var.set(str(error))
+            return
+
         snippet = self._dart_snippet(payload)
-        with open(path, "w", encoding="utf-8") as file:
-            file.write(snippet)
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(snippet)
+            solution_path = write_solution_for_level_payload(
+                payload,
+                solution_text=solution_text,
+            )
+        except OSError as error:
+            messagebox.showerror("无法导出", f"无法写入文件：{error}")
+            self.status_var.set(f"无法写入文件：{error}")
+            return
 
         self.clipboard_clear()
         self.clipboard_append(snippet)
-        self.status_var.set(f"已导出 Dart 片段并复制到剪贴板：{path}")
+        self.status_var.set(
+            f"已导出 Dart 片段并复制到剪贴板：{path}；解决方案：{solution_path}"
+        )
         self._refresh_auto_level_number()
         messagebox.showinfo(
             "导出完成",
-            f"已导出 Dart 片段，并复制到剪贴板：\n{path}",
+            f"已导出 Dart 片段，并复制到剪贴板：\n{path}\n\n"
+            f"已生成解决方案：\n{solution_path}",
         )
 
     @staticmethod
