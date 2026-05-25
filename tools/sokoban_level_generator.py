@@ -59,6 +59,7 @@ SYMBOLS = {
 IMPORT_SYMBOLS = {
     "_": (SYMBOLS["outside"], False),
     " ": (SYMBOLS["floor"], False),
+    "-": (SYMBOLS["floor"], False),
     "#": (SYMBOLS["wall"], False),
     "B": (SYMBOLS["box"], False),
     "$": (SYMBOLS["box"], False),
@@ -70,6 +71,10 @@ IMPORT_SYMBOLS = {
     "@": (SYMBOLS["floor"], True),
     "+": (SYMBOLS["target"], True),
 }
+
+PLAIN_SOKOBAN_SYMBOLS = frozenset(IMPORT_SYMBOLS)
+PLAIN_SOKOBAN_OBJECT_SYMBOLS = frozenset("#B$T.*@+Pp")
+PLAIN_SOKOBAN_REQUIRED_SYMBOLS = frozenset("#B$T.*@+Pp")
 
 TOOL_LABELS = {
     "wall": "墙体",
@@ -179,16 +184,19 @@ def imported_level_payload_from_file(path):
         try:
             return _import_payload_from_json_text(source, path)
         except ValueError as error:
-            if path.suffix.lower() == ".json":
-                raise
-            parse_errors.append(str(error))
+            parse_errors.append(("JSON", str(error)))
 
     try:
         return _import_payload_from_dart_text(source, path)
     except ValueError as error:
-        if parse_errors:
-            raise ValueError(f"{parse_errors[0]}\n{error}") from error
-        raise
+        parse_errors.append(("Dart", str(error)))
+
+    try:
+        return _import_payload_from_plain_sokoban_text(source, path)
+    except ValueError as error:
+        parse_errors.append(("Sokoban 文本", str(error)))
+
+    raise ValueError(_parse_failure_message(path, parse_errors))
 
 
 def solution_text_for_level_payload(
@@ -200,10 +208,10 @@ def solution_text_for_level_payload(
     try:
         pushes = solver.solve_pushes(max_seconds=max_seconds)
     except SokobanSolveTimeout as error:
-        raise ValueError(str(error)) from error
+        raise ValueError(_solution_timeout_message(payload, error)) from error
 
     if pushes is None:
-        raise ValueError("未找到可通关解决方案，已取消导出。")
+        raise ValueError(_solution_failure_message(payload))
 
     return format_pushes(pushes)
 
@@ -225,8 +233,121 @@ def write_solution_for_level_payload(payload, solution_text=None):
     return solution_path
 
 
+def _solution_timeout_message(payload, error):
+    summary = _level_complexity_summary(payload)
+    reasons = _solution_complexity_reasons(summary)
+    lines = [
+        f"求解超时：{error}",
+        (
+            "关卡规模："
+            f"{summary['rows']} x {summary['columns']}，"
+            f"箱子 {summary['boxes']} 个，目标 {summary['targets']} 个，"
+            f"可通行格 {summary['floor_tiles']} 个。"
+        ),
+        "可能原因：",
+    ]
+    lines.extend(f"- {reason}" for reason in reasons)
+    lines.extend(
+        [
+            "可尝试的处理方式：",
+            "- 减少箱子数量或缩小空地面积。",
+            "- 对高箱数关卡使用专业 Sokoban 求解器，或采用反向生成并记录解法。",
+            "- 临时调高 DEFAULT_SOLVER_TIME_LIMIT_SECONDS，但复杂关卡仍可能指数级变慢。",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _solution_failure_message(payload):
+    summary = _level_complexity_summary(payload)
+    reasons = []
+    if summary["boxes"] != summary["targets"]:
+        reasons.append(
+            f"箱子数量与目标点数量不一致（箱子 {summary['boxes']}，目标 {summary['targets']}）。"
+        )
+    if summary["boxes"] < 1:
+        reasons.append("关卡没有箱子。")
+    if summary["targets"] < 1:
+        reasons.append("关卡没有目标点。")
+    if not reasons:
+        reasons.extend(
+            [
+                "部分箱子初始就在死角、贴墙死位或互锁位置。",
+                "玩家无法到达关键推箱位置。",
+                "关卡本身无解，或当前内置求解器的剪枝后没有可探索状态。",
+            ]
+        )
+
+    lines = [
+        "未找到可通关解决方案，已取消导出。",
+        (
+            "关卡规模："
+            f"{summary['rows']} x {summary['columns']}，"
+            f"箱子 {summary['boxes']} 个，目标 {summary['targets']} 个，"
+            f"可通行格 {summary['floor_tiles']} 个。"
+        ),
+        "可能原因：",
+    ]
+    lines.extend(f"- {reason}" for reason in reasons)
+    return "\n".join(lines)
+
+
+def _solution_complexity_reasons(summary):
+    reasons = []
+    if summary["boxes"] >= 12:
+        reasons.append(
+            "箱子数量很高，搜索状态随箱子数量指数增长；"
+            "10 个以上箱子已经可能超出内置求解器能力。"
+        )
+    elif summary["boxes"] >= 8:
+        reasons.append("箱子数量偏多，箱子排列组合会明显放大搜索空间。")
+
+    if summary["floor_tiles"] >= 120:
+        reasons.append("可通行区域较大，玩家可达区域和候选推箱动作太多。")
+    elif summary["floor_tiles"] >= 80:
+        reasons.append("空地较多，搜索分支会明显增加。")
+
+    if summary["boxes"] == summary["targets"] and summary["boxes"] > 0:
+        reasons.append("箱子和目标数量匹配，但可能需要很深的推箱序列才能完成。")
+    if not reasons:
+        reasons.append("当前关卡可能存在深层死锁或需要超出时间限制的推箱序列。")
+    return reasons
+
+
+def _level_complexity_summary(payload):
+    layout = payload.get("layout", []) if isinstance(payload, dict) else []
+    rows = len(layout)
+    columns = max((len(row) for row in layout if isinstance(row, str)), default=0)
+    boxes = 0
+    targets = 0
+    floor_tiles = 0
+
+    for row in layout:
+        if not isinstance(row, str):
+            continue
+        for char in row:
+            tile = IMPORT_SYMBOLS.get(char, (char, False))[0]
+            if tile not in (SYMBOLS["wall"], SYMBOLS["outside"]):
+                floor_tiles += 1
+            if tile in (SYMBOLS["box"], SYMBOLS["box_target"]):
+                boxes += 1
+            if tile in (SYMBOLS["target"], SYMBOLS["box_target"]):
+                targets += 1
+
+    return {
+        "rows": rows,
+        "columns": columns,
+        "boxes": boxes,
+        "targets": targets,
+        "floor_tiles": floor_tiles,
+    }
+
+
 def _solver_level_from_payload(payload):
     player_position = payload["initialPlayerPosition"]
+    if not isinstance(player_position, dict):
+        raise ValueError("缺少玩家初始位置，无法求解。请在关卡中放置 @/P，或设置 initialPlayerPosition。")
+
     return SolverLevel(
         layout=tuple(payload["layout"]),
         initial_player_position=SolverBoardPosition(
@@ -278,6 +399,154 @@ def _import_payload_from_dart_text(source, path):
         },
         fallback_number=_level_number_from_filename(path),
     )
+
+
+def _import_payload_from_plain_sokoban_text(source, path):
+    blocks = _plain_sokoban_level_blocks(source)
+    if not blocks:
+        raise ValueError(
+            "未找到连续的 Sokoban 地图行。支持 # 墙、$ 或 B 箱子、. 或 T 目标、"
+            "@ 或 P 玩家、* 箱子在目标上、+ 玩家在目标上。"
+        )
+
+    number = _level_number_from_filename(path)
+    selected_index = 0
+    if number is not None and 1 <= number <= len(blocks):
+        selected_index = number - 1
+
+    layout = _plain_sokoban_layout_from_block(blocks[selected_index])
+    player_position = _inline_player_position(layout)
+    return _coerce_import_payload(
+        {
+            "number": number,
+            "title": Path(path).stem,
+            "description": (
+                f"从 Sokoban 文本导入；文件包含 {len(blocks)} 个关卡，"
+                f"已选择第 {selected_index + 1} 个。"
+                if len(blocks) > 1
+                else "从 Sokoban 文本导入。"
+            ),
+            "layout": layout,
+            "initialPlayerPosition": player_position,
+        },
+        fallback_number=number,
+    )
+
+
+def _plain_sokoban_level_blocks(source):
+    blocks = []
+    current = []
+
+    for raw_line in source.splitlines():
+        line = raw_line.rstrip()
+        if _is_plain_sokoban_map_line(line):
+            current.append(line)
+            continue
+
+        if current:
+            _append_plain_sokoban_block(blocks, current)
+            current = []
+
+    if current:
+        _append_plain_sokoban_block(blocks, current)
+
+    return blocks
+
+
+def _plain_sokoban_layout_from_block(lines):
+    width = max(len(row) for row in lines)
+    grid = [list(row.ljust(width)) for row in lines]
+    outside_queue = []
+    visited = set()
+
+    for row_index, row in enumerate(grid):
+        for column_index, char in enumerate(row):
+            if _is_border_cell(row_index, column_index, len(grid), width) and char in (
+                " ",
+                "_",
+            ):
+                outside_queue.append((row_index, column_index))
+
+    while outside_queue:
+        row_index, column_index = outside_queue.pop()
+        position = (row_index, column_index)
+        if position in visited:
+            continue
+        visited.add(position)
+        if grid[row_index][column_index] not in (" ", "_"):
+            continue
+
+        grid[row_index][column_index] = "_"
+        for next_row, next_column in (
+            (row_index - 1, column_index),
+            (row_index + 1, column_index),
+            (row_index, column_index - 1),
+            (row_index, column_index + 1),
+        ):
+            if not _position_in_plain_grid(next_row, next_column, len(grid), width):
+                continue
+            if grid[next_row][next_column] in (" ", "_"):
+                outside_queue.append((next_row, next_column))
+
+    return ["".join(row) for row in grid]
+
+
+def _is_border_cell(row, column, rows, columns):
+    return row == 0 or column == 0 or row == rows - 1 or column == columns - 1
+
+
+def _position_in_plain_grid(row, column, rows, columns):
+    return 0 <= row < rows and 0 <= column < columns
+
+
+def _append_plain_sokoban_block(blocks, lines):
+    if _is_valid_plain_sokoban_block(lines):
+        blocks.append(list(lines))
+
+
+def _is_plain_sokoban_map_line(line):
+    if not line or not line.strip():
+        return False
+    if line.lstrip().startswith(";"):
+        return False
+    if any(char not in PLAIN_SOKOBAN_SYMBOLS for char in line):
+        return False
+    return any(char in PLAIN_SOKOBAN_OBJECT_SYMBOLS for char in line)
+
+
+def _is_valid_plain_sokoban_block(lines):
+    joined = "".join(lines)
+    if len(lines) < 2:
+        return False
+    return any(char in PLAIN_SOKOBAN_REQUIRED_SYMBOLS for char in joined)
+
+
+def _inline_player_position(layout):
+    for row_index, row in enumerate(layout):
+        for column_index, char in enumerate(row):
+            symbol = IMPORT_SYMBOLS.get(char)
+            if symbol and symbol[1]:
+                return {"row": row_index, "column": column_index}
+    return None
+
+
+def _parse_failure_message(path, parse_errors):
+    lines = [
+        f"无法解析关卡文件：{Path(path).name}",
+        "已尝试以下格式：",
+    ]
+    for format_name, error in parse_errors:
+        lines.append(f"- {format_name}：{error}")
+    lines.extend(
+        [
+            "",
+            "支持格式：",
+            "- JSON：包含 layout 和 initialPlayerPosition 的关卡对象。",
+            "- Dart：包含 layout: [...] 的 SokobanLevel 片段。",
+            "- Sokoban 文本/XSB：使用 #、$、.、@、*、+ 等符号的纯文本地图。",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _coerce_import_payload(payload, fallback_number=None):
@@ -529,7 +798,7 @@ class SokobanLevelGenerator(tk.Tk):
         export.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         export.columnconfigure(0, weight=1)
 
-        ttk.Button(export, text="导入 JSON/Dart", command=self._import_level).grid(
+        ttk.Button(export, text="导入 JSON/Dart/Sokoban", command=self._import_level).grid(
             row=0,
             column=0,
             sticky="ew",
@@ -871,9 +1140,10 @@ class SokobanLevelGenerator(tk.Tk):
             title="导入关卡",
             initialdir=str(DEFAULT_EXPORT_DIR),
             filetypes=[
-                ("关卡文件", "*.json *.txt *.dart"),
+                ("关卡文件", "*.json *.txt *.dart *.sok *.xsb"),
                 ("JSON", "*.json"),
                 ("Dart/文本", "*.dart *.txt"),
+                ("Sokoban 文本", "*.sok *.xsb *.txt"),
                 ("所有文件", "*.*"),
             ],
         )
